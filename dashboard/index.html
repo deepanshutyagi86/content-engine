@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Engine</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: #e8e8e8;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    border-bottom: 1px solid #1e1e1e;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: #fff;
+  }
+  .logo span { color: #7c6ef2; }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #3ecf7a;
+    display: inline-block;
+    margin-right: 8px;
+  }
+  .status-text { font-size: 12px; color: #555; }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    height: calc(100vh - 53px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    border-right: 1px solid #1e1e1e;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: #444;
+    padding: 0 8px;
+    margin-bottom: 6px;
+    margin-top: 16px;
+  }
+  .sidebar-label:first-child { margin-top: 0; }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #666;
+    transition: all .15s;
+    border: 1px solid transparent;
+  }
+  .nav-item:hover { background: #111; color: #ccc; }
+  .nav-item.active { background: #13111f; color: #a89ff5; border-color: #2a2540; }
+  .nav-item .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #333;
+    flex-shrink: 0;
+  }
+  .nav-item.done .dot { background: #3ecf7a; }
+  .nav-item.active .dot { background: #7c6ef2; }
+  .nav-item.running .dot {
+    background: #f0a500;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .3; }
+  }
+
+  /* ── Main ── */
+  .main { overflow-y: auto; padding: 32px; }
+
+  /* ── Settings Panel ── */
+  .panel {
+    display: none;
+    max-width: 720px;
+  }
+  .panel.active { display: block; }
+
+  .panel-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .panel-sub {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 28px;
+  }
+
+  .field { margin-bottom: 20px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: #e8e8e8;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .field input:focus, .field select:focus { border-color: #7c6ef2; }
+  .field select option { background: #111; }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all .15s;
+  }
+  .btn-primary {
+    background: #7c6ef2;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #6b5de0; }
+  .btn-primary:disabled { background: #2a2540; color: #555; cursor: not-allowed; }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid #222;
+    color: #888;
+  }
+  .btn-ghost:hover { border-color: #444; color: #ccc; }
+
+  /* ── Agent Card ── */
+  .agent-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .agent-tag {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #7c6ef2;
+    margin-bottom: 6px;
+  }
+  .agent-status {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #111;
+    border: 1px solid #222;
+    color: #555;
+  }
+  .agent-status.running {
+    background: #1a1400;
+    border-color: #3d2e00;
+    color: #f0a500;
+  }
+  .agent-status.done {
+    background: #0a1a0f;
+    border-color: #1a3a22;
+    color: #3ecf7a;
+  }
+
+  /* ── Output Box ── */
+  .output-box {
+    background: #0d0d0d;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    padding: 20px;
+    min-height: 200px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #888;
+    white-space: pre-wrap;
+    font-family: 'SF Mono', 'Monaco', monospace;
+    margin-top: 20px;
+  }
+  .output-box.has-content { color: #ccc; }
+
+  /* ── Topic / Hook Selector ── */
+  .selector-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .selector-item {
+    background: #0d0d0d;
+    border: 1px solid #1e1e1e;
+    border-radius: 8px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .selector-item:hover { border-color: #333; background: #111; }
+  .selector-item.selected { border-color: #7c6ef2; background: #13111f; }
+  .selector-item-title { font-size: 13px; color: #ccc; font-weight: 500; }
+  .selector-item-sub { font-size: 11px; color: #555; margin-top: 3px; }
+  .selector-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: #1a1a1a;
+    color: #555;
+    flex-shrink: 0;
+  }
+  .selector-item.selected .selector-badge {
+    background: #2a2540;
+    color: #a89ff5;
+  }
+
+  /* ── Score Cards ── */
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .score-card {
+    background: #0d0d0d;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .score-val {
+    font-size: 32px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .score-val.high { color: #3ecf7a; }
+  .score-val.mid { color: #f0a500; }
+  .score-val.low { color: #e85d5d; }
+  .score-label {
+    font-size: 11px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .verdict-box {
+    margin-top: 16px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: #0a1a0f;
+    border: 1px solid #1a3a22;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .verdict-box.warn {
+    background: #1a1000;
+    border-color: #3d2800;
+  }
+  .verdict-text { font-size: 13px; color: #3ecf7a; font-weight: 500; }
+  .verdict-text.warn { color: #f0a500; }
+  .verdict-sub { font-size: 11px; color: #3a7a52; margin-top: 3px; }
+
+  .improvements {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .improvement-item {
+    background: #0d0d0d;
+    border: 1px solid #1e1e1e;
+    border-left: 2px solid #f0a500;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 14px;
+  }
+  .improvement-section { font-size: 11px; color: #f0a500; margin-bottom: 4px; }
+  .improvement-problem { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .improvement-suggestion { font-size: 12px; color: #ccc; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 13px;
+    color: #ccc;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all .2s;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: #1a3a22; color: #3ecf7a; }
+  .toast.error { border-color: #3a1a1a; color: #e85d5d; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <div class="logo">content <span>engine</span></div>
+  <div>
+    <span class="status-dot" id="serverDot"></span>
+    <span class="status-text" id="serverStatus">connected</span>
+  </div>
+</div>
+
+<!-- Layout -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-label">Setup</div>
+    <div class="nav-item active" onclick="showPanel('settings')" id="nav-settings">
+      <span class="dot"></span> Settings
+    </div>
+
+    <div class="sidebar-label">Pipeline</div>
+    <div class="nav-item" onclick="showPanel('research')" id="nav-research">
+      <span class="dot"></span> Research
+    </div>
+    <div class="nav-item" onclick="showPanel('hooks')" id="nav-hooks">
+      <span class="dot"></span> Hook factory
+    </div>
+    <div class="nav-item" onclick="showPanel('script')" id="nav-script">
+      <span class="dot"></span> Script engine
+    </div>
+
+    <div class="sidebar-label">Score</div>
+    <div class="nav-item" onclick="showPanel('score')" id="nav-score">
+      <span class="dot"></span> TRIBE v2 score
+    </div>
+
+    <div class="sidebar-label">Publish</div>
+    <div class="nav-item" onclick="showPanel('metadata')" id="nav-metadata">
+      <span class="dot"></span> Metadata
+    </div>
+    <div class="nav-item" onclick="showPanel('repurpose')" id="nav-repurpose">
+      <span class="dot"></span> Repurpose
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Settings Panel -->
+    <div class="panel active" id="panel-settings">
+      <div class="panel-title">Settings</div>
+      <div class="panel-sub">Set your niche and platform. Every agent adapts to these.</div>
+      <div class="field">
+        <label>Your niche</label>
+        <input type="text" id="niche" placeholder="e.g. tech, finance, fitness, cooking" value="tech">
+      </div>
+      <div class="field">
+        <label>Platform</label>
+        <select id="platform">
+          <option value="youtube">YouTube</option>
+          <option value="instagram">Instagram</option>
+          <option value="tiktok">TikTok</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Channel style</label>
+        <select id="channel_style">
+          <option value="educational">Educational</option>
+          <option value="entertainment">Entertainment</option>
+          <option value="news">News</option>
+          <option value="tutorials">Tutorials</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+    </div>
+
+    <!-- Research Panel -->
+    <div class="panel" id="panel-research">
+      <div class="agent-header">
+        <div>
+          <div class="agent-tag">Agent 1</div>
+          <div class="panel-title">Research</div>
+          <div class="panel-sub">Finds the 5 best topic ideas for your niche right now.</div>
+        </div>
+        <span class="agent-status" id="status-research">idle</span>
+      </div>
+      <button class="btn btn-primary" id="btn-research" onclick="runAgent('research')">
+        Run research agent
+      </button>
+      <div class="selector-grid" id="topics-list"></div>
+      <div class="output-box" id="output-research">Output will appear here...</div>
+    </div>
+
+    <!-- Hooks Panel -->
+    <div class="panel" id="panel-hooks">
+      <div class="agent-header">
+        <div>
+          <div class="agent-tag">Agent 2</div>
+          <div class="panel-title">Hook factory</div>
+          <div class="panel-sub">Generates 8 hooks for your selected topic.</div>
+        </div>
+        <span class="agent-status" id="status-hooks">idle</span>
+      </div>
+      <div id="hooks-topic-display" style="font-size:13px;color:#555;margin-bottom:16px;">Select a topic first from Research.</div>
+      <button class="btn btn-primary" id="btn-hooks" onclick="runAgent('hooks')" disabled>
+        Generate hooks
+      </button>
+      <div class="selector-grid" id="hooks-list"></div>
+      <div class="output-box" id="output-hooks">Output will appear here...</div>
+    </div>
+
+    <!-- Script Panel -->
+    <div class="panel" id="panel-script">
+      <div class="agent-header">
+        <div>
+          <div class="agent-tag">Agent 3</div>
+          <div class="panel-title">Script engine</div>
+          <div class="panel-sub">Writes your full video script from the selected hook.</div>
+        </div>
+        <span class="agent-status" id="status-script">idle</span>
+      </div>
+      <div id="script-hook-display" style="font-size:13px;color:#555;margin-bottom:16px;">Select a hook first from Hook factory.</div>
+      <button class="btn btn-primary" id="btn-script" onclick="runAgent('script')" disabled>
+        Generate script
+      </button>
+      <div class="output-box" id="output-script">Output will appear here...</div>
+    </div>
+
+    <!-- Score Panel -->
+    <div class="panel" id="panel-score">
+      <div class="agent-header">
+        <div>
+          <div class="agent-tag">TRIBE v2</div>
+          <div class="panel-title">Virality score</div>
+          <div class="panel-sub">Predicts neural activation before you film a single frame.</div>
+        </div>
+        <span class="agent-status" id="status-score">idle</span>
+      </div>
+      <button class="btn btn-primary" id="btn-score" onclick="runAgent('score')">
+        Score my script
+      </button>
+      <div class="score-grid" id="score-grid" style="display:none">
+        <div class="score-card">
+          <div class="score-val" id="sc-hook">—</div>
+          <div class="score-label">Hook strength</div>
+        </div>
+        <div class="score-card">
+          <div class="score-val" id="sc-retention">—</div>
+          <div class="score-label">Retention score</div>
+        </div>
+        <div class="score-card">
+          <div class="score-val" id="sc-viral">—</div>
+          <div class="score-label">Viral probability</div>
+        </div>
+      </div>
+      <div id="verdict-area"></div>
+      <div class="improvements" id="improvements-list"></div>
+    </div>
+
+    <!-- Metadata Panel -->
+    <div class="panel" id="panel-metadata">
+      <div class="agent-header">
+        <div>
+          <div class="agent-tag">Agent 5</div>
+          <div class="panel-title">Metadata</div>
+          <div class="panel-sub">Titles, description, tags, thumbnail concept, post time.</div>
+        </div>
+        <span class="agent-status" id="status-metadata">idle</span>
+      </div>
+      <button class="btn btn-primary" id="btn-metadata" onclick="runAgent('metadata')">
+        Generate metadata
+      </button>
+      <div class="output-box" id="output-metadata">Output will appear here...</div>
+    </div>
+
+    <!-- Repurpose Panel -->
+    <div class="panel" id="panel-repurpose">
+      <div class="agent-header">
+        <div>
+          <div class="agent-tag">Agent 6</div>
+          <div class="panel-title">Repurpose</div>
+          <div class="panel-sub">Cuts your script into Reels, Shorts and TikTok clips.</div>
+        </div>
+        <span class="agent-status" id="status-repurpose">idle</span>
+      </div>
+      <button class="btn btn-primary" id="btn-repurpose" onclick="runAgent('repurpose')">
+        Repurpose content
+      </button>
+      <div class="output-box" id="output-repurpose">Output will appear here...</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+let selectedTopic = null;
+let selectedHook  = null;
+
+// ── Navigation ──────────────────────────────────────────────
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'score') loadScores();
+}
+
+// ── Toast ────────────────────────────────────────────────────
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+// ── Save Settings ────────────────────────────────────────────
+async function saveSettings() {
+  const body = {
+    niche:         document.getElementById('niche').value,
+    platform:      document.getElementById('platform').value,
+    channel_style: document.getElementById('channel_style').value,
+  };
+  const res  = await fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data.status === 'ok') showToast('Settings saved', 'success');
+  else showToast('Error saving settings', 'error');
+}
+
+// ── Run Agent ────────────────────────────────────────────────
+async function runAgent(name) {
+  const btn    = document.getElementById('btn-' + name);
+  const status = document.getElementById('status-' + name);
+  const navItem = document.getElementById('nav-' + name);
+
+  btn.disabled     = true;
+  btn.textContent  = 'Running...';
+  status.textContent = 'running';
+  status.className   = 'agent-status running';
+  navItem.className  = navItem.className.replace('done','') + ' running';
+
+  const body = {};
+  if (name === 'hooks')  body.selected_topic = selectedTopic;
+  if (name === 'script') body.selected_hook  = selectedHook;
+
+  try {
+    const res  = await fetch('/api/run/' + name, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      status.textContent = 'done';
+      status.className   = 'agent-status done';
+      navItem.classList.remove('running');
+      navItem.classList.add('done');
+      navItem.querySelector('.dot').style.background = '#3ecf7a';
+      showToast(name + ' agent complete', 'success');
+      loadOutput(name);
+    } else {
+      status.textContent = 'error';
+      status.className   = 'agent-status';
+      showToast(data.message || 'Agent failed', 'error');
+    }
+  } catch(e) {
+    showToast('Server error', 'error');
+  }
+
+  btn.disabled    = false;
+  btn.textContent = 'Run again';
+}
+
+// ── Load Output ──────────────────────────────────────────────
+async function loadOutput(name) {
+  const fileMap = {
+    research: 'topics.md',
+    hooks:    'hooks.md',
+    script:   'script.md',
+    metadata: 'metadata.md',
+    repurpose:'repurpose.md',
+  };
+  const file = fileMap[name];
+  if (!file) return;
+
+  const res  = await fetch('/api/output/' + file);
+  const data = await res.json();
+
+  if (data.status === 'ok' && data.content) {
+    const box = document.getElementById('output-' + name);
+    box.textContent = data.content;
+    box.classList.add('has-content');
+
+    if (name === 'research') parseTopics(data.content);
+    if (name === 'hooks')    parseHooks(data.content);
+  }
+}
+
+// ── Parse Topics into selectable cards ──────────────────────
+function parseTopics(content) {
+  const list  = document.getElementById('topics-list');
+  list.innerHTML = '';
+  const regex = /## (\d+)\. (.+?)\n\*\*Why trending:\*\* (.+?)\n.*?Viral score:\*\* (\d+)/gs;
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    const [, num, title, why, score] = match;
+    const item = document.createElement('div');
+    item.className = 'selector-item';
+    item.innerHTML = `
+      <div>
+        <div class="selector-item-title">${title}</div>
+        <div class="selector-item-sub">${why}</div>
+      </div>
+      <span class="selector-badge">${score}/10</span>
+    `;
+    item.onclick = () => {
+      document.querySelectorAll('#topics-list .selector-item')
+        .forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      selectedTopic = num;
+      document.getElementById('hooks-topic-display').textContent = 'Topic ' + num + ': ' + title;
+      document.getElementById('btn-hooks').disabled = false;
+      showToast('Topic ' + num + ' selected', 'success');
+    };
+    list.appendChild(item);
+  }
+}
+
+// ── Parse Hooks into selectable cards ───────────────────────
+function parseHooks(content) {
+  const list = document.getElementById('hooks-list');
+  list.innerHTML = '';
+  const regex = /## Hook (\d+) — (.+?)\n\*\*Hook:\*\* "(.+?)"\n\*\*Why it works:\*\* (.+?)\n\*\*Scroll-stop score:\*\* (\d+)/gs;
+  let match;
+  while ((match = regex.exec(content)) !== null) {
+    const [, num, formula, hook, why, score] = match;
+    const item = document.createElement('div');
+    item.className = 'selector-item';
+    item.innerHTML = `
+      <div>
+        <div class="selector-item-title">"${hook}"</div>
+        <div class="selector-item-sub">${formula} · ${why}</div>
+      </div>
+      <span class="selector-badge">${score}/10</span>
+    `;
+    item.onclick = () => {
+      document.querySelectorAll('#hooks-list .selector-item')
+        .forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      selectedHook = num;
+      document.getElementById('script-hook-display').textContent = 'Hook ' + num + ': ' + hook;
+      document.getElementById('btn-script').disabled = false;
+      showToast('Hook ' + num + ' selected', 'success');
+    };
+    list.appendChild(item);
+  }
+}
+
+// ── Load TRIBE v2 Scores ─────────────────────────────────────
+async function loadScores() {
+  const res  = await fetch('/api/output/scores.json');
+  const data = await res.json();
+  if (data.status !== 'ok' || !data.content) return;
+
+  let scores;
+  try { scores = JSON.parse(data.content); } catch(e) { return; }
+
+  document.getElementById('score-grid').style.display = 'grid';
+
+  const setScore = (id, val) => {
+    const el = document.getElementById(id);
+    el.textContent = val + '%';
+    el.className = 'score-val ' + (val >= 80 ? 'high' : val >= 60 ? 'mid' : 'low');
+  };
+  setScore('sc-hook',      scores.hook_strength);
+  setScore('sc-retention', scores.retention_score);
+  setScore('sc-viral',     scores.viral_probability);
+
+  const verdict = document.getElementById('verdict-area');
+  const isGood  = scores.overall >= 70;
+  verdict.innerHTML = `
+    <div class="verdict-box ${isGood ? '' : 'warn'}">
+      <div>
+        <div class="verdict-text ${isGood ? '' : 'warn'}">${scores.verdict}</div>
+        <div class="verdict-sub">Overall score: ${scores.overall}/100</div>
+      </div>
+    </div>
+  `;
+
+  if (scores.improvements && scores.improvements.length) {
+    const list = document.getElementById('improvements-list');
+    list.innerHTML = '';
+    scores.improvements.forEach(imp => {
+      list.innerHTML += `
+        <div class="improvement-item">
+          <div class="improvement-section">${imp.section}</div>
+          <div class="improvement-problem">${imp.problem}</div>
+          <div class="improvement-suggestion">${imp.suggestion}</div>
+        </div>
+      `;
+    });
+  }
+}
+
+
+
+async function loadSettings() {
+  const res  = await fetch('/api/settings');
+  const data = await res.json();
+  if (data.status !== 'ok') return;
+  document.getElementById('niche').value         = data.niche;
+  document.getElementById('platform').value      = data.platform;
+  document.getElementById('channel_style').value = data.channel_style;
+}
+
+loadSettings();
+
+
+
+// ── Auto-load existing outputs on panel switch ───────────────
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const panel = item.id.replace('nav-','');
+    if (['research','hooks','script','metadata','repurpose'].includes(panel)) {
+      loadOutput(panel);
+    }
+    if (panel === 'score') {
+      loadScores();
+    }
+  });
+});
+</script>
+</body>
+</html>
+
