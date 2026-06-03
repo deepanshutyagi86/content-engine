@@ -4,776 +4,1796 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Content Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  body {
-    background: #0a0a0a;
-    color: #e8e8e8;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    min-height: 100vh;
-  }
+/* ============================================================
+   DESIGN TOKENS — CHANGE ONLY THIS SECTION FOR REDESIGNS
+   ============================================================ */
+   :root {
+  /* Background layers */
+  --bg-base:      #0a0f1e;
+  --bg-surface:   #111828;
+  --bg-elevated:  #171f30;
+  --bg-overlay:   #1e2740;
 
-  /* ── Top Bar ── */
-  .topbar {
-    border-bottom: 1px solid #1e1e1e;
-    padding: 16px 32px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .logo {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: .04em;
-    color: #fff;
-  }
-  .logo span { color: #7c6ef2; }
-  .status-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: #3ecf7a;
-    display: inline-block;
-    margin-right: 8px;
-  }
-  .status-text { font-size: 12px; color: #555; }
+  /* Brand colors */
+  --clr-config:   #ffffff;
+  --clr-research: #00d4ff;
+  --clr-hooks:    #ff006e;
+  --clr-script:   #7fff00;
+  --clr-tribe:    #bf5fff;
+  --clr-video:    #ff6b00;
+  --clr-publish:  #00fff0;
+  --clr-good:     #7fff00;
+  --clr-warn:     #f59e0b;
+  --clr-error:    #ef4444;
 
-  /* ── Layout ── */
-  .layout {
-    display: grid;
-    grid-template-columns: 260px 1fr;
-    height: calc(100vh - 53px);
-  }
+  /* Text */
+  --txt-primary:   #f0f4ff;
+  --txt-secondary: #a0aec0;
+  --txt-muted:     #4a5a7a;
 
-  /* ── Sidebar ── */
-  .sidebar {
-    border-right: 1px solid #1e1e1e;
-    padding: 24px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .sidebar-label {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: #444;
-    padding: 0 8px;
-    margin-bottom: 6px;
-    margin-top: 16px;
-  }
-  .sidebar-label:first-child { margin-top: 0; }
+  /* Borders */
+  --border-subtle:  rgba(255,255,255,0.09);
+  --border-default: rgba(255,255,255,0.15);
+  --border-strong:  rgba(255,255,255,0.22);
 
-  .nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    color: #666;
-    transition: all .15s;
-    border: 1px solid transparent;
-  }
-  .nav-item:hover { background: #111; color: #ccc; }
-  .nav-item.active { background: #13111f; color: #a89ff5; border-color: #2a2540; }
-  .nav-item .dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: #333;
-    flex-shrink: 0;
-  }
-  .nav-item.done .dot { background: #3ecf7a; }
-  .nav-item.active .dot { background: #7c6ef2; }
-  .nav-item.running .dot {
-    background: #f0a500;
-    animation: pulse 1s infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .3; }
-  }
+  /* Typography */
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
-  /* ── Main ── */
-  .main { overflow-y: auto; padding: 32px; }
+  /* Sizing */
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-xl:  18px;
 
-  /* ── Settings Panel ── */
-  .panel {
-    display: none;
-    max-width: 720px;
-  }
-  .panel.active { display: block; }
+  /* Spacing */
+  --sp-xs:  6px;
+  --sp-sm:  10px;
+  --sp-md:  16px;
+  --sp-lg:  24px;
+  --sp-xl:  32px;
+  --sp-2xl: 48px;
 
-  .panel-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 6px;
-  }
-  .panel-sub {
-    font-size: 13px;
-    color: #555;
-    margin-bottom: 28px;
-  }
+  --topbar-h: 52px;
+}
+/* ============================================================
+   END DESIGN TOKENS
+   ============================================================ */
 
-  .field { margin-bottom: 20px; }
-  .field label {
-    display: block;
-    font-size: 12px;
-    font-weight: 500;
-    color: #666;
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-  }
-  .field input, .field select {
-    width: 100%;
-    background: #111;
-    border: 1px solid #222;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 14px;
-    color: #e8e8e8;
-    outline: none;
-    transition: border-color .15s;
-  }
-  .field input:focus, .field select:focus { border-color: #7c6ef2; }
-  .field select option { background: #111; }
 
-  .btn {
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
-    transition: all .15s;
-  }
-  .btn-primary {
-    background: #7c6ef2;
-    color: #fff;
-  }
-  .btn-primary:hover { background: #6b5de0; }
-  .btn-primary:disabled { background: #2a2540; color: #555; cursor: not-allowed; }
-  .btn-ghost {
-    background: transparent;
-    border: 1px solid #222;
-    color: #888;
-  }
-  .btn-ghost:hover { border-color: #444; color: #ccc; }
+/* ── Reset & base ─────────────────────────────────────── */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg-base); color:var(--txt-primary); font-family:var(--font-body); }
 
-  /* ── Agent Card ── */
-  .agent-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 24px;
-  }
-  .agent-tag {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-    color: #7c6ef2;
-    margin-bottom: 6px;
-  }
-  .agent-status {
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 20px;
-    background: #111;
-    border: 1px solid #222;
-    color: #555;
-  }
-  .agent-status.running {
-    background: #1a1400;
-    border-color: #3d2e00;
-    color: #f0a500;
-  }
-  .agent-status.done {
-    background: #0a1a0f;
-    border-color: #1a3a22;
-    color: #3ecf7a;
-  }
+/* ── Background canvas ────────────────────────────────── */
+#bgCanvas { position:fixed; inset:0; z-index:0; pointer-events:none; }
+#flashOverlay { position:fixed; inset:0; z-index:9998; pointer-events:none; opacity:0; transition:opacity 0.15s; }
 
-  /* ── Output Box ── */
-  .output-box {
-    background: #0d0d0d;
-    border: 1px solid #1e1e1e;
-    border-radius: 10px;
-    padding: 20px;
-    min-height: 200px;
-    font-size: 13px;
-    line-height: 1.7;
-    color: #888;
-    white-space: pre-wrap;
-    font-family: 'SF Mono', 'Monaco', monospace;
-    margin-top: 20px;
-  }
-  .output-box.has-content { color: #ccc; }
+/* ── Ripple ───────────────────────────────────────────── */
+.ripple {
+  position:fixed; border-radius:50%; pointer-events:none; z-index:9999;
+  border:2px solid rgba(0,212,255,0.35);
+  animation:rippleOut 0.6s ease-out forwards;
+}
+@keyframes rippleOut { 0%{transform:scale(0);opacity:0.6} 100%{transform:scale(1);opacity:0} }
 
-  /* ── Topic / Hook Selector ── */
-  .selector-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 16px;
-  }
-  .selector-item {
-    background: #0d0d0d;
-    border: 1px solid #1e1e1e;
-    border-radius: 8px;
-    padding: 14px 16px;
-    cursor: pointer;
-    transition: all .15s;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .selector-item:hover { border-color: #333; background: #111; }
-  .selector-item.selected { border-color: #7c6ef2; background: #13111f; }
-  .selector-item-title { font-size: 13px; color: #ccc; font-weight: 500; }
-  .selector-item-sub { font-size: 11px; color: #555; margin-top: 3px; }
-  .selector-badge {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 20px;
-    background: #1a1a1a;
-    color: #555;
-    flex-shrink: 0;
-  }
-  .selector-item.selected .selector-badge {
-    background: #2a2540;
-    color: #a89ff5;
-  }
+/* ── App shell ────────────────────────────────────────── */
+.app { position:relative; z-index:1; display:grid; grid-template-rows:var(--topbar-h) 1fr; height:100vh; }
 
-  /* ── Score Cards ── */
-  .score-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-top: 20px;
-  }
-  .score-card {
-    background: #0d0d0d;
-    border: 1px solid #1e1e1e;
-    border-radius: 10px;
-    padding: 16px;
-    text-align: center;
-  }
-  .score-val {
-    font-size: 32px;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 4px;
-  }
-  .score-val.high { color: #3ecf7a; }
-  .score-val.mid { color: #f0a500; }
-  .score-val.low { color: #e85d5d; }
-  .score-label {
-    font-size: 11px;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-  }
-  .verdict-box {
-    margin-top: 16px;
-    padding: 14px 18px;
-    border-radius: 10px;
-    background: #0a1a0f;
-    border: 1px solid #1a3a22;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .verdict-box.warn {
-    background: #1a1000;
-    border-color: #3d2800;
-  }
-  .verdict-text { font-size: 13px; color: #3ecf7a; font-weight: 500; }
-  .verdict-text.warn { color: #f0a500; }
-  .verdict-sub { font-size: 11px; color: #3a7a52; margin-top: 3px; }
+/* ── Topbar ───────────────────────────────────────────── */
+.topbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 var(--sp-lg);
+  border-bottom:1px solid var(--border-subtle);
+  background:rgba(4,5,8,0.95);
+  backdrop-filter:blur(20px);
+}
 
-  .improvements {
-    margin-top: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .improvement-item {
-    background: #0d0d0d;
-    border: 1px solid #1e1e1e;
-    border-left: 2px solid #f0a500;
-    border-radius: 0 8px 8px 0;
-    padding: 12px 14px;
-  }
-  .improvement-section { font-size: 11px; color: #f0a500; margin-bottom: 4px; }
-  .improvement-problem { font-size: 12px; color: #888; margin-bottom: 6px; }
-  .improvement-suggestion { font-size: 12px; color: #ccc; }
+.logo {
+  display:flex; align-items:center; gap:var(--sp-sm);
+  font-family:var(--font-mono); font-size:13px; font-weight:700;
+  letter-spacing:0.1em; text-transform:uppercase; cursor:pointer;
+}
 
-  /* ── Toast ── */
-  .toast {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    background: #111;
-    border: 1px solid #222;
-    border-radius: 8px;
-    padding: 12px 18px;
-    font-size: 13px;
-    color: #ccc;
-    opacity: 0;
-    transform: translateY(8px);
-    transition: all .2s;
-    z-index: 100;
-  }
-  .toast.show { opacity: 1; transform: translateY(0); }
-  .toast.success { border-color: #1a3a22; color: #3ecf7a; }
-  .toast.error { border-color: #3a1a1a; color: #e85d5d; }
+.logo-orb {
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  background:conic-gradient(from 0deg,
+    var(--clr-research), var(--clr-tribe), var(--clr-hooks),
+    var(--clr-video), var(--clr-script), var(--clr-publish),
+    var(--clr-research));
+  animation:orbSpin 4s linear infinite;
+  display:flex; align-items:center; justify-content:center; position:relative;
+}
+.logo-orb::after {
+  content:'⚡'; position:absolute; font-size:12px;
+  background:var(--bg-base); border-radius:50%;
+  width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+}
+@keyframes orbSpin { to { transform:rotate(360deg); } }
+
+.logo-accent { background:linear-gradient(90deg,var(--clr-research),var(--clr-tribe)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+
+.topbar-pills { display:flex; gap:var(--sp-xs); }
+.topbar-pill {
+  font-family:var(--font-mono); font-size:9px; padding:4px 10px;
+  border-radius:20px; letter-spacing:0.08em; text-transform:uppercase; border:1px solid;
+}
+
+.topbar-right { display:flex; align-items:center; gap:var(--sp-md); }
+
+.live-dot {
+  display:flex; align-items:center; gap:var(--sp-xs);
+  font-family:var(--font-mono); font-size:9px; color:var(--txt-secondary);
+}
+.live-dot::before {
+  content:''; width:6px; height:6px; border-radius:50%;
+  background:var(--clr-good); box-shadow:0 0 8px var(--clr-good);
+  animation:livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+.back-btn {
+  display:none; align-items:center; gap:var(--sp-xs);
+  font-family:var(--font-mono); font-size:10px; color:var(--txt-secondary);
+  cursor:pointer; padding:5px 12px; border-radius:var(--radius-sm);
+  border:1px solid var(--border-subtle); transition:all 0.2s;
+}
+.back-btn:hover { border-color:var(--border-default); color:var(--txt-primary); }
+.back-btn.visible { display:flex; }
+
+/* ── Main viewport ────────────────────────────────────── */
+.viewport { position:relative; overflow:hidden; }
+
+/* ── HOME PAGE ────────────────────────────────────────── */
+.home {
+  position:absolute; inset:0; overflow-y:auto;
+  padding:var(--sp-2xl) var(--sp-xl) var(--sp-xl);
+  animation:pageIn 0.4s ease;
+}
+.home::-webkit-scrollbar { width:3px; }
+.home::-webkit-scrollbar-thumb { background:var(--border-default); border-radius:2px; }
+
+.home-hero { text-align:center; margin-bottom:var(--sp-2xl); }
+.home-title { font-size:52px; font-weight:900; letter-spacing:-0.03em; line-height:1.05; margin-bottom:var(--sp-sm); }
+.home-title-line1 {
+  background:linear-gradient(90deg,var(--clr-research),var(--clr-tribe));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:block;
+  filter:drop-shadow(0 0 20px rgba(0,212,255,0.6)) drop-shadow(0 0 40px rgba(191,95,255,0.4));
+  animation:textGlitch 8s infinite;
+}
+.home-title-line2 {
+  background:linear-gradient(90deg,var(--clr-hooks),var(--clr-video));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:block;
+  filter:drop-shadow(0 0 20px rgba(255,0,110,0.6)) drop-shadow(0 0 40px rgba(255,107,0,0.4));
+}
+@keyframes textGlitch{
+  0%,88%,100%{clip-path:none;transform:none}
+  90%{clip-path:polygon(0 15%,100% 15%,100% 35%,0 35%);transform:translateX(-4px)}
+  92%{clip-path:polygon(0 55%,100% 55%,100% 75%,0 75%);transform:translateX(4px)}
+  94%{clip-path:none;transform:none}
+}
+.home-subtitle { font-size:16px; color:var(--txt-secondary); max-width:540px; margin:0 auto; line-height:1.7; }
+
+.home-section-label {
+  font-family:var(--font-mono); font-size:9px; letter-spacing:0.2em;
+  text-transform:uppercase; color:var(--txt-muted);
+  display:flex; align-items:center; gap:var(--sp-sm);
+  max-width:1200px; margin:var(--sp-xl) auto var(--sp-sm);
+}
+.home-section-label::after { content:''; flex:1; height:1px; background:var(--border-subtle); }
+
+.home-grid {
+  display:grid; gap:14px;
+  max-width:1200px; margin:0 auto;
+}
+.home-grid-1 { grid-template-columns:1fr; }
+.home-grid-4 { grid-template-columns:repeat(4,1fr); }
+.home-grid-2 { grid-template-columns:1fr 1fr; }
+
+/* ── Feature card ─────────────────────────────────────── */
+.fcard {
+  border-radius:var(--radius-xl); padding:var(--sp-lg) var(--sp-md) var(--sp-md);
+  cursor:pointer; position:relative;
+  border:1px solid var(--border-subtle); background:var(--bg-elevated);
+  transition:transform 0.25s, box-shadow 0.25s;
+  animation:cardIn 0.5s cubic-bezier(0.16,1,0.3,1) both;
+}
+.fcard:hover { transform:translateY(-5px); }
+.fcard[data-color="research"]{box-shadow:0 0 15px rgba(0,212,255,0.2),inset 0 0 30px rgba(0,212,255,0.03)}
+.fcard[data-color="hooks"]{box-shadow:0 0 15px rgba(255,0,110,0.2),inset 0 0 30px rgba(255,0,110,0.03)}
+.fcard[data-color="script"]{box-shadow:0 0 15px rgba(127,255,0,0.2),inset 0 0 30px rgba(127,255,0,0.03)}
+.fcard[data-color="tribe"]{box-shadow:0 0 15px rgba(191,95,255,0.2),inset 0 0 30px rgba(191,95,255,0.03)}
+.fcard[data-color="video"]{box-shadow:0 0 15px rgba(255,107,0,0.2),inset 0 0 30px rgba(255,107,0,0.03)}
+.fcard[data-color="publish"]{box-shadow:0 0 15px rgba(0,255,240,0.2),inset 0 0 30px rgba(0,255,240,0.03)}
+.fcard[data-color="research"]:hover{box-shadow:0 0 35px rgba(0,212,255,0.5),0 0 80px rgba(0,212,255,0.15)}
+.fcard[data-color="hooks"]:hover{box-shadow:0 0 35px rgba(255,0,110,0.5),0 0 80px rgba(255,0,110,0.15)}
+.fcard[data-color="script"]:hover{box-shadow:0 0 35px rgba(127,255,0,0.5),0 0 80px rgba(127,255,0,0.15)}
+.fcard[data-color="tribe"]:hover{box-shadow:0 0 35px rgba(191,95,255,0.5),0 0 80px rgba(191,95,255,0.15)}
+.fcard[data-color="video"]:hover{box-shadow:0 0 35px rgba(255,107,0,0.5),0 0 80px rgba(255,107,0,0.15)}
+.fcard[data-color="publish"]:hover{box-shadow:0 0 35px rgba(0,255,240,0.5),0 0 80px rgba(0,255,240,0.15)}
+.fcard::before { content:''; position:absolute; inset:0; border-radius:var(--radius-xl); opacity:0; transition:opacity 0.3s; }
+.fcard:hover::before { opacity:1; }
+.fcard::after {
+  content:'';
+  position:absolute;
+  inset:-3px;
+  border-radius:calc(var(--radius-xl) + 4px);
+  background:conic-gradient(
+    from var(--border-angle),
+    transparent 0%,
+    transparent 62%,
+    var(--neon,#00d4ff) 70%,
+    rgba(255,255,255,1) 74%,
+    var(--neon,#00d4ff) 78%,
+    transparent 86%,
+    transparent 100%
+  );
+  animation:borderSpin 2.5s linear infinite;
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  padding:3px;
+  filter:drop-shadow(0 0 6px var(--neon,#00d4ff)) drop-shadow(0 0 12px var(--neon,#00d4ff));
+  z-index:1;
+  height:unset;width:unset;top:-3px;left:-3px;right:-3px;bottom:-3px;
+  opacity:1;
+}
+.fcard:nth-child(1)::after{animation-duration:2s}
+.fcard:nth-child(2)::after{animation-duration:3s}
+.fcard:nth-child(3)::after{animation-duration:1.8s}
+.fcard:nth-child(4)::after{animation-duration:2.5s}
+.fcard:nth-child(5)::after{animation-duration:3.5s}
+.fcard:nth-child(6)::after{animation-duration:2.2s}
+
+/* Per-color card variants — change color values in :root to retheme all cards */
+.fcard[data-color="config"]   { border-color:rgba(255,255,255,0.08); }
+
+.fcard[data-color="config"]:hover    { box-shadow:0 12px 40px rgba(255,255,255,0.05); }
+.fcard[data-color="config"]::before  { background:rgba(255,255,255,0.02); }
+
+.fcard[data-color="research"] { border-color:rgba(0,212,255,0.15); }
+
+.fcard[data-color="research"]:hover   { box-shadow:0 12px 40px rgba(0,212,255,0.15); }
+.fcard[data-color="research"]::before { background:rgba(0,212,255,0.04); }
+
+.fcard[data-color="hooks"] { border-color:rgba(255,0,110,0.15); }
+
+.fcard[data-color="hooks"]:hover   { box-shadow:0 12px 40px rgba(255,0,110,0.15); }
+.fcard[data-color="hooks"]::before { background:rgba(255,0,110,0.04); }
+
+.fcard[data-color="script"] { border-color:rgba(127,255,0,0.15); }
+
+.fcard[data-color="script"]:hover   { box-shadow:0 12px 40px rgba(127,255,0,0.15); }
+.fcard[data-color="script"]::before { background:rgba(127,255,0,0.04); }
+
+.fcard[data-color="tribe"] { border-color:rgba(191,95,255,0.15); }
+
+.fcard[data-color="tribe"]:hover   { box-shadow:0 12px 40px rgba(191,95,255,0.15); }
+.fcard[data-color="tribe"]::before { background:rgba(191,95,255,0.04); }
+
+
+.fcard[data-color="video"]:hover   { box-shadow:0 12px 40px rgba(255,107,0,0.15); }
+.fcard[data-color="video"]::before { background:rgba(255,107,0,0.04); }
+
+.fcard[data-color="publish"] { border-color:rgba(0,255,240,0.15); }
+
+.fcard[data-color="publish"]:hover   { box-shadow:0 12px 40px rgba(0,255,240,0.12); }
+.fcard[data-color="publish"]::before { background:rgba(0,255,240,0.04); }
+
+.fcard-status {
+  position:absolute; top:14px; right:14px;
+  width:7px; height:7px; border-radius:50%;
+  background:var(--txt-muted); transition:all 0.3s;
+}
+.fcard-status.done   { background:var(--clr-good); box-shadow:0 0 8px var(--clr-good); }
+.fcard-status.running{ background:var(--clr-warn); animation:statusPulse 0.8s ease-in-out infinite; }
+@keyframes statusPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.5);opacity:0.5} }
+
+.fcard-num   { font-family:var(--font-mono); font-size:10px; letter-spacing:0.15em; opacity:0.4; margin-bottom:var(--sp-sm); }
+.fcard-icon  { font-size:28px; margin-bottom:var(--sp-sm); display:block; }
+.fcard-title { font-size:18px; font-weight:800; letter-spacing:-0.02em; color:#fff; margin-bottom:var(--sp-xs); line-height:1.1; }
+.fcard-desc  { font-size:12px; color:var(--txt-secondary); line-height:1.65; margin-bottom:var(--sp-md); }
+.fcard-tags  { display:flex; flex-wrap:wrap; gap:5px; }
+.fcard-tag   { font-family:var(--font-mono); font-size:8px; padding:3px 8px; border-radius:var(--radius-sm); letter-spacing:0.06em; border:1px solid; }
+.fcard-arrow { position:absolute; bottom:18px; right:18px; font-size:16px; opacity:0.25; transition:all 0.2s; }
+.fcard:hover .fcard-arrow { opacity:0.7; transform:translate(3px,-3px); }
+
+@keyframes cardIn { from{opacity:0;transform:translateY(18px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+
+
+@property --border-angle{syntax:'<angle>';initial-value:0deg;inherits:false}
+.fcard[data-color="research"]{--neon:#00d4ff}
+.fcard[data-color="hooks"]{--neon:#ff006e}
+.fcard[data-color="script"]{--neon:#7fff00}
+.fcard[data-color="tribe"]{--neon:#bf5fff}
+.fcard[data-color="video"]{--neon:#ff6b00}
+.fcard[data-color="publish"]{--neon:#00fff0}
+.fcard[data-color="config"]{--neon:rgba(255,255,255,0.5)}
+.fcard::after{
+  content:'';position:absolute;inset:-2px;border-radius:var(--radius-xl);
+  background:conic-gradient(from var(--border-angle),transparent 60%,var(--neon,#00d4ff) 75%,white 82%,var(--neon,#00d4ff) 88%,transparent 100%);
+  animation:borderSpin 2.5s linear infinite;
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  padding:2px;opacity:1;z-index:-1;
+  top:-2px;left:-2px;right:-2px;bottom:-2px;height:unset;width:unset;
+  filter:blur(0px);
+}
+.fcard:hover::after{filter:blur(1px);opacity:1}
+@keyframes borderSpin{to{--border-angle:360deg}}
+.fcard:hover::after{opacity:1}
+.fcard:nth-child(1)::after{animation-duration:2.5s}
+.fcard:nth-child(2)::after{animation-duration:3.5s}
+.fcard:nth-child(3)::after{animation-duration:2s}
+.fcard:nth-child(4)::after{animation-duration:4s}
+.fcard:nth-child(5)::after{animation-duration:3s}
+.fcard:nth-child(6)::after{animation-duration:2.8s}
+
+/* ── Spinning neon border on every card ── */
+@property --border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.fcard {
+  background: var(--bg-elevated);
+  position: relative;
+  z-index: 0;
+}
+
+.fcard::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--radius-xl);
+  padding: 1px;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 20%,
+    var(--neon-color, rgba(0,212,255,0.6)) 40%,
+    transparent 60%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: borderSpin 3s linear infinite;
+  opacity: 0.5;
+  z-index: -1;
+}
+
+@keyframes borderSpin { to { --border-angle: 360deg; } }
+
+/* Each card color */
+.fcard[data-color="research"]  { --neon-color: #00d4ff; }
+.fcard[data-color="hooks"]     { --neon-color: #ff006e; }
+.fcard[data-color="script"]    { --neon-color: #7fff00; }
+.fcard[data-color="tribe"]     { --neon-color: #bf5fff; }
+.fcard[data-color="video"]     { --neon-color: #ff6b00; }
+.fcard[data-color="publish"]   { --neon-color: #00fff0; }
+.fcard[data-color="config"]    { --neon-color: rgba(255,255,255,0.5); }
+
+/* Stagger spin speed per card so they don't all look the same */
+.fcard:nth-child(2) { animation: cardIn 0.5s both, borderSpin 3s linear infinite; }
+.fcard:nth-child(3)::before { animation-duration: 4s; }
+.fcard:nth-child(4)::before { animation-duration: 2.5s; }
+.fcard:nth-child(5)::before { animation-duration: 3.5s; }
+.fcard:nth-child(6)::before { animation-duration: 2s; }
+
+/* Glow intensifies on hover */
+.fcard:hover::before { opacity: 1; }
+
+
+/* Always-on idle animations */
+.fcard {
+  animation: cardIn 0.5s cubic-bezier(0.16,1,0.3,1) both, cardIdlePulse 4s ease-in-out infinite;
+  animation-delay: var(--delay, 0s), 2s;
+}
+@keyframes cardIdlePulse {
+  0%,100% { border-color: var(--idle-border, rgba(255,255,255,0.09)); }
+  50%      { border-color: var(--idle-border-bright, rgba(255,255,255,0.18)); }
+}
+
+/* Each color gets its own idle glow */
+.fcard[data-color="research"] { --idle-border:rgba(0,212,255,0.1); --idle-border-bright:rgba(0,212,255,0.28); }
+.fcard[data-color="hooks"]    { --idle-border:rgba(255,0,110,0.1); --idle-border-bright:rgba(255,0,110,0.28); }
+.fcard[data-color="script"]   { --idle-border:rgba(127,255,0,0.1); --idle-border-bright:rgba(127,255,0,0.28); }
+.fcard[data-color="tribe"]    { --idle-border:rgba(191,95,255,0.1); --idle-border-bright:rgba(191,95,255,0.28); }
+.fcard[data-color="video"]    { --idle-border:rgba(255,107,0,0.1); --idle-border-bright:rgba(255,107,0,0.28); }
+.fcard[data-color="publish"]  { --idle-border:rgba(0,255,240,0.1); --idle-border-bright:rgba(0,255,240,0.28); }
+
+/* Stagger each card's pulse so they don't all pulse together */
+.fcard:nth-child(1) { animation-delay:0s, 0s; }
+.fcard:nth-child(2) { animation-delay:0.06s, 0.6s; }
+.fcard:nth-child(3) { animation-delay:0.12s, 1.2s; }
+.fcard:nth-child(4) { animation-delay:0.18s, 1.8s; }
+.fcard:nth-child(5) { animation-delay:0.24s, 2.4s; }
+.fcard:nth-child(6) { animation-delay:0.30s, 3.0s; }
+.fcard:nth-child(7) { animation-delay:0.36s, 3.6s; }
+
+/* Status dot always breathing */
+.fcard-status {
+  animation: dotBreath 3s ease-in-out infinite;
+}
+@keyframes dotBreath {
+  0%,100% { opacity:0.4; transform:scale(1); }
+  50%      { opacity:0.9; transform:scale(1.3); }
+}
+
+/* Logo orb — faster when system active */
+.logo-orb { animation: orbSpin 3s linear infinite; }
+
+/* Live dot — more dramatic pulse */
+@keyframes livePulse {
+  0%,100% { opacity:1; box-shadow:0 0 8px var(--clr-good); }
+  50%      { opacity:0.3; box-shadow:0 0 2px var(--clr-good); }
+}
+
+/* Topbar pills — subtle shimmer */
+.topbar-pill {
+  animation: pillShimmer 5s ease-in-out infinite;
+}
+.topbar-pill:nth-child(2) { animation-delay: 1.5s; }
+.topbar-pill:nth-child(3) { animation-delay: 3s; }
+@keyframes pillShimmer {
+  0%,80%,100% { opacity:1; }
+  90%         { opacity:0.5; }
+}
+
+
+/* Spinning neon border when card is running */
+@property --spin-angle { syntax:'<angle>'; initial-value:0deg; inherits:false; }
+.fcard.card-running { animation:cardIn 0s, cardGlowPulse 2s ease-in-out infinite !important; }
+@keyframes cardGlowPulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,255,240,0)} 50%{box-shadow:0 0 28px 4px rgba(0,255,240,0.3)} }
+.fcard.card-running::before { opacity:1 !important; background:conic-gradient(from var(--spin-angle), transparent 60%, rgba(0,255,240,0.6) 80%, transparent 100%) !important; animation:spinBorderAnim 1.5s linear infinite !important; }
+@keyframes spinBorderAnim { to { --spin-angle: 360deg; } }
+
+/* ── PANEL PAGE ───────────────────────────────────────── */
+.panel-page {
+  position:absolute; inset:0; overflow-y:auto;
+  padding:var(--sp-xl) var(--sp-xl);
+  display:none;
+  animation:pageIn 0.35s cubic-bezier(0.16,1,0.3,1);
+}
+.panel-page::-webkit-scrollbar { width:3px; }
+.panel-page::-webkit-scrollbar-thumb { background:var(--border-default); border-radius:2px; }
+.panel-page.visible { display:block; }
+
+@keyframes pageIn { from{opacity:0;transform:translateX(14px)} to{opacity:1;transform:translateX(0)} }
+
+.panel-layout { display:grid; grid-template-columns:1fr 260px; gap:var(--sp-lg); max-width:1080px; }
+.panel-main {}
+.panel-sidebar { display:flex; flex-direction:column; gap:var(--sp-sm); }
+
+/* Panel header */
+.ph-eyebrow {
+  font-family:var(--font-mono); font-size:9px; letter-spacing:0.18em;
+  text-transform:uppercase; margin-bottom:5px;
+  display:flex; align-items:center; gap:var(--sp-sm);
+}
+.ph-eyebrow::before { content:'▶'; font-size:7px; }
+.ph-title { font-size:26px; font-weight:800; letter-spacing:-0.025em; color:#fff; margin-bottom:6px; line-height:1; }
+.ph-sub   { font-size:13px; color:var(--txt-secondary); margin-bottom:var(--sp-lg); line-height:1.65; max-width:480px; }
+.ph-row   { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:var(--sp-md); }
+
+/* ── Status badge ─────────────────────────────────────── */
+.badge { font-family:var(--font-mono); font-size:9px; padding:5px 10px; border-radius:var(--radius-sm); letter-spacing:0.1em; text-transform:uppercase; border:1px solid var(--border-default); color:var(--txt-secondary); background:var(--bg-surface); white-space:nowrap; }
+.badge.running { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.3); color:var(--clr-warn); }
+.badge.done    { background:rgba(127,255,0,0.1);  border-color:rgba(127,255,0,0.3);  color:var(--clr-good); }
+.badge.error   { background:rgba(239,68,68,0.1);  border-color:rgba(239,68,68,0.3);  color:var(--clr-error); }
+
+/* ── Form fields ──────────────────────────────────────── */
+.field { margin-bottom:var(--sp-sm); }
+.field label { display:block; font-family:var(--font-mono); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--txt-secondary); margin-bottom:7px; }
+.field input, .field select, .field textarea { width:100%; background:var(--bg-elevated); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:10px 14px; font-size:13px; font-family:var(--font-body); color:var(--txt-primary); outline:none; transition:border-color 0.2s; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color:var(--clr-tribe); box-shadow:0 0 0 3px rgba(191,95,255,0.07); }
+.field textarea { resize:vertical; min-height:110px; line-height:1.7; }
+.field select option { background:var(--bg-elevated); }
+
+/* ── Buttons ──────────────────────────────────────────── */
+.btn { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:var(--radius-md); font-size:12px; font-family:var(--font-body); font-weight:700; letter-spacing:0.05em; text-transform:uppercase; cursor:pointer; border:none; transition:all 0.2s; position:relative; overflow:hidden; }
+.btn::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent); transform:translateX(-100%); }
+.btn:hover::after { animation:btnShine 0.5s forwards; }
+@keyframes btnShine { to{transform:translateX(100%)} }
+.btn-primary { color:#000; box-shadow:0 0 20px rgba(0,0,0,0.3); }
+.btn-primary:hover { transform:translateY(-1px); }
+.btn-primary:disabled { opacity:0.3; cursor:not-allowed; transform:none; }
+.btn-ghost { background:transparent; border:1px solid var(--border-default); color:var(--txt-secondary); }
+.btn-ghost:hover { border-color:var(--border-strong); color:var(--txt-primary); }
+.btn-row { display:flex; gap:var(--sp-sm); margin-bottom:4px; }
+
+/* ── Terminal ─────────────────────────────────────────── */
+.terminal { background:var(--bg-base); border:1px solid var(--border-default); border-radius:var(--radius-md); margin-top:var(--sp-sm); overflow:hidden;  }
+.term-header { display:flex; align-items:center; gap:6px; padding:9px 13px; border-bottom:1px solid var(--border-subtle); background:rgba(0,0,0,0.3); }
+.term-dot { width:10px; height:10px; border-radius:50%; }
+.term-name { font-family:var(--font-mono); font-size:10px; color:var(--txt-secondary); margin-left:6px; letter-spacing:0.05em; }
+.term-body { padding:var(--sp-md); min-height:120px; font-family:var(--font-mono); font-size:12px; line-height:1.9; color:rgba(127,255,0,0.5); white-space:pre-wrap; max-height:300px; overflow-y:auto; }
+.term-body::-webkit-scrollbar { width:3px; }
+.term-body::-webkit-scrollbar-thumb { background:var(--border-default); }
+.term-body.filled { color:rgba(200,255,200,0.75); }
+.cursor { display:inline-block; width:8px; height:13px; background:var(--clr-script); animation:cursorBlink 1s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ── Selectable cards (topics / hooks) ────────────────── */
+.sel-list { display:flex; flex-direction:column; gap:7px; margin-top:var(--sp-sm); }
+.sel-card { background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:12px 14px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; justify-content:space-between; gap:12px; position:relative; overflow:hidden; }
+.sel-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--border-default); transition:all 0.2s; }
+.sel-card:hover { border-color:var(--border-default); background:rgba(255,255,255,0.02); }
+.sel-card.picked { border-color:rgba(0,212,255,0.3); background:rgba(0,212,255,0.05); }
+.sel-card.picked::before { background:var(--clr-research); box-shadow:0 0 8px var(--clr-research); }
+.sel-card-title { font-size:13px; font-weight:600; color:var(--txt-primary); margin-bottom:3px; }
+.sel-card-sub   { font-size:11px; color:var(--txt-secondary); line-height:1.5; }
+.sel-card-score { font-family:var(--font-mono); font-size:11px; font-weight:700; padding:3px 9px; border-radius:var(--radius-sm); background:var(--bg-overlay); color:var(--txt-secondary); border:1px solid var(--border-default); flex-shrink:0; }
+.sel-card.picked .sel-card-score { background:rgba(0,212,255,0.1); color:var(--clr-research); border-color:rgba(0,212,255,0.2); }
+
+/* ── Progress ─────────────────────────────────────────── */
+.progress { display:none; background:var(--bg-elevated); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:var(--sp-md); margin-top:var(--sp-sm); }
+.progress-top { display:flex; justify-content:space-between; margin-bottom:9px; }
+.progress-label { font-family:var(--font-mono); font-size:10px; color:var(--txt-secondary); }
+.progress-pct   { font-family:var(--font-mono); font-size:11px; font-weight:700; }
+.progress-track { height:3px; background:var(--bg-overlay); border-radius:2px; overflow:hidden; margin-bottom:var(--sp-sm); }
+.progress-fill  { height:100%; border-radius:2px; width:0%; transition:width 0.5s ease; }
+.progress-steps { display:flex; flex-direction:column; gap:6px; }
+.pstep { display:flex; align-items:center; gap:9px; font-family:var(--font-mono); font-size:10px; color:var(--txt-muted); transition:color 0.2s; }
+.pstep-icon { width:16px; height:16px; border-radius:var(--radius-sm); border:1px solid var(--border-default); display:flex; align-items:center; justify-content:center; font-size:8px; flex-shrink:0; transition:all 0.2s; }
+.pstep.active { color:var(--clr-tribe); }
+.pstep.active .pstep-icon { background:var(--clr-tribe); border-color:var(--clr-tribe); color:#000; box-shadow:0 0 10px var(--clr-tribe); }
+.pstep.done { color:var(--clr-good); }
+.pstep.done .pstep-icon { background:rgba(127,255,0,0.1); border-color:var(--clr-good); color:var(--clr-good); }
+
+/* ── Time range slider ────────────────────────────────── */
+.range-wrap { display:none; background:var(--bg-elevated); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:var(--sp-md); margin-bottom:var(--sp-sm); }
+.range-label { font-family:var(--font-mono); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--txt-secondary); margin-bottom:var(--sp-sm); }
+.range-display { display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--sp-sm); }
+.range-pill { font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--clr-video); background:rgba(255,107,0,0.1); border:1px solid rgba(255,107,0,0.2); padding:4px 12px; border-radius:var(--radius-sm); }
+.range-sep { font-family:var(--font-mono); font-size:10px; color:var(--txt-secondary); }
+.range-track { position:relative; height:32px; display:flex; align-items:center; margin-bottom:6px; }
+.range-bg    { position:absolute; left:0; right:0; height:4px; background:var(--bg-overlay); border-radius:2px; }
+.range-fill  { position:absolute; height:4px; background:linear-gradient(90deg,var(--clr-video),#ffaa00); border-radius:2px; }
+.range-handle{ position:absolute; width:16px; height:16px; border-radius:var(--radius-sm); background:var(--clr-video); border:2px solid rgba(255,255,255,0.2); transform:translate(-50%,-50%); top:50%; cursor:grab; z-index:2; transition:box-shadow 0.15s; }
+.range-handle:hover { box-shadow:0 0 14px var(--clr-video); }
+.range-input { position:absolute; width:100%; height:32px; opacity:0; cursor:pointer; z-index:3; }
+.range-hint  { font-family:var(--font-mono); font-size:9px; color:var(--txt-secondary); text-align:center; }
+
+/* ── Score cinema reveal ──────────────────────────────── */
+.score-reveal { display:none; margin-top:var(--sp-lg); animation:revealIn 0.8s cubic-bezier(0.16,1,0.3,1); }
+@keyframes revealIn { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
+
+.reveal-header { display:flex; align-items:center; gap:var(--sp-sm); margin-bottom:var(--sp-md); }
+.reveal-label  { font-family:var(--font-mono); font-size:9px; letter-spacing:0.2em; text-transform:uppercase; }
+.reveal-line   { flex:1; height:1px; }
+
+.score-trio { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--sp-sm); margin-bottom:var(--sp-sm); }
+.score-box {
+  background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:var(--radius-lg);
+  padding:22px 14px; text-align:center; position:relative; overflow:hidden;
+  cursor:pointer; transition:transform 0.3s;
+}
+.score-box:hover { transform:translateY(-3px); }
+.score-box::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; }
+.score-box::after  { content:''; position:absolute; bottom:0; left:15%; right:15%; height:1px; }
+.score-box.hi::before { background:linear-gradient(90deg,transparent,var(--clr-good),transparent); }
+.score-box.hi::after  { background:var(--clr-good); box-shadow:0 0 12px var(--clr-good); }
+.score-box.md::before { background:linear-gradient(90deg,transparent,var(--clr-warn),transparent); }
+.score-box.md::after  { background:var(--clr-warn); box-shadow:0 0 12px var(--clr-warn); }
+.score-box.lo::before { background:linear-gradient(90deg,transparent,var(--clr-error),transparent); }
+.score-box.lo::after  { background:var(--clr-error); box-shadow:0 0 12px var(--clr-error); }
+.score-num { font-family:var(--font-mono); font-size:48px; font-weight:700; line-height:1; margin-bottom:5px; letter-spacing:-0.03em; }
+.score-box.hi .score-num { color:var(--clr-good); text-shadow:0 0 24px rgba(127,255,0,0.4); }
+.score-box.md .score-num { color:var(--clr-warn); text-shadow:0 0 24px rgba(245,158,11,0.4); }
+.score-box.lo .score-num { color:var(--clr-error); text-shadow:0 0 24px rgba(239,68,68,0.4); }
+.score-lbl { font-family:var(--font-mono); font-size:8px; letter-spacing:0.14em; text-transform:uppercase; color:var(--txt-secondary); }
+
+/* ── Verdict card ─────────────────────────────────────── */
+.verdict { border-radius:var(--radius-lg); border:1px solid; padding:var(--sp-md) var(--sp-lg); margin-bottom:var(--sp-md); position:relative; overflow:hidden; }
+.verdict.good { background:rgba(127,255,0,0.04); border-color:rgba(127,255,0,0.2); }
+.verdict.warn { background:rgba(245,158,11,0.04); border-color:rgba(245,158,11,0.2); }
+.verdict::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; }
+.verdict.good::before { background:linear-gradient(90deg,transparent,var(--clr-good),transparent); }
+.verdict.warn::before { background:linear-gradient(90deg,transparent,var(--clr-warn),transparent); }
+.verdict-inner { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:var(--sp-md); }
+.verdict-emoji { font-size:32px; }
+.verdict-headline { font-size:18px; font-weight:800; letter-spacing:-0.02em; line-height:1.2; }
+.verdict.good .verdict-headline { color:var(--clr-good); }
+.verdict.warn .verdict-headline { color:var(--clr-warn); }
+.verdict-meta { font-family:var(--font-mono); font-size:9px; color:var(--txt-secondary); margin-top:4px; letter-spacing:0.05em; }
+.verdict-score-num { font-family:var(--font-mono); font-size:36px; font-weight:700; line-height:1; text-align:center; }
+.verdict.good .verdict-score-num { color:var(--clr-good); text-shadow:0 0 20px rgba(127,255,0,0.5); }
+.verdict.warn .verdict-score-num { color:var(--clr-warn); }
+.verdict-score-lbl { font-family:var(--font-mono); font-size:8px; letter-spacing:0.1em; color:var(--txt-secondary); text-align:center; margin-top:2px; }
+
+/* ── Brain section ────────────────────────────────────── */
+.brain-section { display:none; margin-top:var(--sp-md); }
+.brain-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-sm); }
+.brain-title { font-family:var(--font-mono); font-size:9px; letter-spacing:0.18em; text-transform:uppercase; color:var(--clr-tribe); }
+.brain-badge { font-family:var(--font-mono); font-size:8px; padding:3px 9px; border-radius:var(--radius-sm); background:rgba(191,95,255,0.1); color:var(--clr-tribe); border:1px solid rgba(191,95,255,0.2); }
+.brain-box { background:var(--bg-elevated); border:1px solid rgba(191,95,255,0.15); border-radius:var(--radius-lg); padding:var(--sp-sm); overflow:hidden; position:relative; }
+.brain-box::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--clr-tribe),transparent); opacity:0.5; }
+.brain-loading { display:flex; align-items:center; gap:var(--sp-sm); padding:var(--sp-sm); font-family:var(--font-mono); font-size:10px; color:var(--txt-secondary); }
+.brain-spinner { width:14px; height:14px; border:2px solid var(--border-default); border-top-color:var(--clr-tribe); border-radius:50%; animation:spin 1s linear infinite; flex-shrink:0; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.brain-img { width:100%; border-radius:var(--radius-md); cursor:pointer; transition:transform 0.3s; animation:brainIn 1.2s cubic-bezier(0.16,1,0.3,1); }
+@keyframes brainIn { from{opacity:0;filter:blur(14px) brightness(2);transform:scale(0.97)} to{opacity:1;filter:none;transform:scale(1)} }
+.brain-img:hover { transform:scale(1.005); }
+.brain-canvas-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-sm); }
+.brain-hemi-label { font-family:var(--font-mono); font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:var(--txt-secondary); text-align:center; margin-bottom:6px; }
+
+/* ── Graph section ────────────────────────────────────── */
+.graph-section { display:none; margin-top:var(--sp-sm); }
+.graph-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--sp-sm); }
+.graph-title { font-family:var(--font-mono); font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:var(--txt-secondary); }
+.graph-legend { display:flex; gap:var(--sp-sm); }
+.graph-legend-item { display:flex; align-items:center; gap:5px; font-family:var(--font-mono); font-size:8px; color:var(--txt-secondary); }
+.graph-legend-dot { width:6px; height:6px; border-radius:50%; }
+.graph-box { background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-md); }
+
+/* ── Fix suggestions ──────────────────────────────────── */
+.fix-list { margin-top:var(--sp-sm); display:flex; flex-direction:column; gap:7px; }
+.fix-item { background:var(--bg-elevated); border:1px solid var(--border-subtle); border-left:2px solid var(--clr-warn); border-radius:0 var(--radius-md) var(--radius-md) 0; padding:12px 14px; transition:border-left-color 0.2s; }
+.fix-item:hover { border-left-color:var(--clr-error); }
+.fix-ts      { font-family:var(--font-mono); font-size:9px; letter-spacing:0.1em; color:var(--clr-warn); margin-bottom:3px; }
+.fix-problem { font-size:12px; color:var(--txt-secondary); margin-bottom:5px; }
+.fix-suggest { font-size:12px; color:var(--txt-primary); line-height:1.6; padding:7px 11px; background:var(--bg-overlay); border-radius:var(--radius-sm); border:1px solid var(--border-subtle); }
+
+/* ── Sidebar widgets ──────────────────────────────────── */
+.widget-label { font-family:var(--font-mono); font-size:8px; letter-spacing:0.2em; text-transform:uppercase; color:var(--txt-muted); margin-bottom:7px; }
+.metric-card { background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-sm); }
+.metric-card-label { font-family:var(--font-mono); font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:var(--txt-secondary); margin-bottom:4px; }
+.metric-card-value { font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--txt-primary); line-height:1; margin-bottom:3px; }
+.metric-card-sub   { font-family:var(--font-mono); font-size:9px; color:var(--txt-muted); letter-spacing:0.04em; }
+.metric-card-bar   { height:2px; background:var(--bg-overlay); border-radius:1px; margin-top:8px; overflow:hidden; }
+.metric-card-fill  { height:100%; border-radius:1px; transition:width 1s ease; width:0%; }
+
+.syslog { background:var(--bg-base); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-sm); }
+.syslog-header { font-family:var(--font-mono); font-size:8px; letter-spacing:0.15em; text-transform:uppercase; color:var(--txt-secondary); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+.syslog-dot { width:5px; height:5px; border-radius:50%; background:var(--clr-good); animation:livePulse 1.5s ease-in-out infinite; }
+.syslog-body { font-family:var(--font-mono); font-size:9px; line-height:1.9; color:rgba(127,255,0,0.4); max-height:220px; overflow-y:auto; }
+.syslog-body::-webkit-scrollbar { width:0; }
+.log-entry { margin-bottom:1px; }
+.log-ts { color:var(--txt-muted); margin-right:7px; }
+.log-msg { color:rgba(127,255,0,0.45); }
+.log-msg.success { color:var(--clr-good); }
+.log-msg.warn    { color:var(--clr-warn); }
+.log-msg.error   { color:var(--clr-error); }
+.log-msg.info    { color:var(--clr-tribe); }
+
+/* ── Toast ────────────────────────────────────────────── */
+.toast { position:fixed; bottom:22px; right:22px; background:var(--bg-elevated); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:10px 16px; font-family:var(--font-mono); font-size:11px; color:var(--txt-secondary); opacity:0; transform:translateY(8px); transition:all 0.25s; z-index:9999; backdrop-filter:blur(20px); }
+.toast.show { opacity:1; transform:translateY(0); }
+.toast.success { border-color:rgba(127,255,0,0.3); color:var(--clr-good); }
+.toast.error   { border-color:rgba(239,68,68,0.3);  color:var(--clr-error); }
+
 </style>
 </head>
 <body>
+<canvas id="bgCanvas"></canvas>
+<div id="flashOverlay"></div>
 
-<!-- Top Bar -->
-<div class="topbar">
-  <div class="logo">content <span>engine</span></div>
-  <div>
-    <span class="status-dot" id="serverDot"></span>
-    <span class="status-text" id="serverStatus">connected</span>
+<div class="app">
+
+<!-- ═══ TOPBAR ═══════════════════════════════════════════ -->
+<header class="topbar">
+  <div class="logo" onclick="goHome()">
+    <div class="logo-orb"></div>
+    <span>Content&nbsp;<span class="logo-accent">Engine</span></span>
+  </div>
+
+  <div class="topbar-pills">
+    <div class="topbar-pill" style="color:var(--clr-research);border-color:rgba(0,212,255,0.3);background:rgba(0,212,255,0.06)">Neural OS v2</div>
+    <div class="topbar-pill" style="color:var(--clr-tribe);border-color:rgba(191,95,255,0.3);background:rgba(191,95,255,0.06)">TRIBE v2 · Meta</div>
+    <div class="topbar-pill" style="color:var(--clr-script);border-color:rgba(127,255,0,0.3);background:rgba(127,255,0,0.06)">Claude Code</div>
+  </div>
+
+  <div class="topbar-right">
+    <div class="back-btn" id="backBtn" onclick="goHome()">← Home</div>
+    <div class="live-dot">SYSTEM ONLINE</div>
+  </div>
+</header>
+
+<!-- ═══ VIEWPORT ════════════════════════════════════════ -->
+<div class="viewport">
+
+<!-- ───── HOME PAGE ───────────────────────────────────── -->
+<div class="home" id="homePage">
+
+
+  <!-- AUTOPILOT HERO -->
+  <div style="max-width:1200px;margin:0 auto var(--sp-lg);position:relative">
+    <div class="fcard" id="fc-autopilot" data-panel="autopilot" style="border-color:rgba(0,255,240,0.25);display:grid;grid-template-columns:1fr auto;align-items:center;gap:var(--sp-lg);padding:var(--sp-lg) var(--sp-lg)">
+      <div>
+        <div class="fcard-num" style="color:var(--clr-publish);opacity:1;letter-spacing:0.2em">AUTO — AGENT 08</div>
+        <div class="fcard-title" style="font-size:22px;margin-bottom:var(--sp-xs)">🤖 Autopilot — Full Pipeline</div>
+        <div class="fcard-desc" style="max-width:600px;margin-bottom:var(--sp-sm)">One click runs everything. Claude researches topics, picks the best one, writes your script, generates AI suggestions — then sends the complete brief to Telegram. Wake up to a ready-to-film content brief.</div>
+        <div class="fcard-tags">
+          <span class="fcard-tag" style="color:var(--clr-publish);border-color:rgba(0,255,240,0.3);background:rgba(0,255,240,0.06)">auto pipeline</span>
+          <span class="fcard-tag" style="color:var(--clr-publish);border-color:rgba(0,255,240,0.3);background:rgba(0,255,240,0.06)">telegram</span>
+          <span class="fcard-tag" style="color:var(--clr-publish);border-color:rgba(0,255,240,0.3);background:rgba(0,255,240,0.06)">morning brief</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:var(--sp-sm);flex-shrink:0">
+        <div class="fcard-status" id="fcs-autopilot" style="position:static;margin-bottom:4px"></div>
+        <button id="hero-btn-autopilot" onclick="event.stopPropagation();runAutopilotHero()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 22px;border-radius:var(--radius-md);font-size:12px;font-family:var(--font-body);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;border:none;background:var(--clr-publish);color:#000;box-shadow:0 0 24px rgba(0,255,240,0.35);transition:all 0.2s">🤖 Run Autopilot</button>
+        <button id="hero-tg-btn" onclick="event.stopPropagation();sendToTelegram()" style="display:none;align-items:center;gap:8px;padding:8px 16px;border-radius:var(--radius-md);font-size:11px;font-family:var(--font-body);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;border:1px solid rgba(0,255,240,0.3);background:transparent;color:var(--clr-publish);transition:all 0.2s">📱 Send to Telegram</button>
+        <div id="hero-autopilot-status" style="font-family:var(--font-mono);font-size:9px;color:var(--txt-muted)">Standby</div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="home-hero">
+    <h1 class="home-title">
+      <span class="home-title-line1">AI Mission Control</span>
+      <span class="home-title-line2">for Content Creators</span>
+    </h1>
+    <p class="home-subtitle">9 Claude agents + Meta TRIBE v2 brain model. Research, write, score, and publish — all from one command center.</p>
+  </div>
+
+  <div class="home-section-label">Setup</div>
+  <div class="home-grid home-grid-1">
+    <div class="fcard" data-color="config" data-panel="settings" style="animation-delay:0s">
+      <div class="fcard-status" id="fcs-settings"></div>
+      <div class="fcard-num">00</div>
+      <span class="fcard-icon">⚙️</span>
+      <div class="fcard-title">Config</div>
+      <div class="fcard-desc">Set your niche and platform. Every agent in the pipeline calibrates automatically to these parameters.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--txt-secondary);border-color:var(--border-default)">niche</span>
+        <span class="fcard-tag" style="color:var(--txt-secondary);border-color:var(--border-default)">platform</span>
+        <span class="fcard-tag" style="color:var(--txt-secondary);border-color:var(--border-default)">style</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+  </div>
+
+
+
+ 
+
+
+
+  <div class="home-section-label">Pipeline — Claude Agents</div>
+  <div class="home-grid home-grid-4">
+    <div class="fcard" data-color="research" data-panel="research" style="animation-delay:0.06s">
+      <div class="fcard-status" id="fcs-research"></div>
+      <div class="fcard-num">01</div>
+      <span class="fcard-icon">🔍</span>
+      <div class="fcard-title">Research</div>
+      <div class="fcard-desc">Scans trending topics. Finds what the algorithm wants before your competitors do.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-research);border-color:rgba(0,212,255,0.2);background:rgba(0,212,255,0.05)">trending</span>
+        <span class="fcard-tag" style="color:var(--clr-research);border-color:rgba(0,212,255,0.2);background:rgba(0,212,255,0.05)">viral score</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+
+    <div class="fcard" data-color="hooks" data-panel="hooks" style="animation-delay:0.10s">
+      <div class="fcard-status" id="fcs-hooks"></div>
+      <div class="fcard-num">02</div>
+      <span class="fcard-icon">🎣</span>
+      <div class="fcard-title">Hook Factory</div>
+      <div class="fcard-desc">8 psychological triggers. Curiosity gaps, bold claims, fear. Every hook is a weapon.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-hooks);border-color:rgba(255,0,110,0.2);background:rgba(255,0,110,0.05)">8 hooks</span>
+        <span class="fcard-tag" style="color:var(--clr-hooks);border-color:rgba(255,0,110,0.2);background:rgba(255,0,110,0.05)">psychology</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+
+    <div class="fcard" data-color="script" data-panel="script" style="animation-delay:0.14s">
+      <div class="fcard-status" id="fcs-script"></div>
+      <div class="fcard-num">03</div>
+      <span class="fcard-icon">✍️</span>
+      <div class="fcard-title">Short Script</div>
+      <div class="fcard-desc">30–40 second weapon. Hook → Loop → Value → CTA. Built for Reels, Shorts, TikTok.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-script);border-color:rgba(127,255,0,0.2);background:rgba(127,255,0,0.05)">30s</span>
+        <span class="fcard-tag" style="color:var(--clr-script);border-color:rgba(127,255,0,0.2);background:rgba(127,255,0,0.05)">reels</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+
+    <div class="fcard" data-color="script" data-panel="script_long" style="animation-delay:0.18s">
+      <div class="fcard-status" id="fcs-script_long"></div>
+      <div class="fcard-num">03B</div>
+      <span class="fcard-icon">📺</span>
+      <div class="fcard-title">YouTube Script</div>
+      <div class="fcard-desc">Full 10-min blueprint. Pattern interrupts every 60 seconds. B-roll cues. Timestamps.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-script);border-color:rgba(127,255,0,0.2);background:rgba(127,255,0,0.05)">10 min</span>
+        <span class="fcard-tag" style="color:var(--clr-script);border-color:rgba(127,255,0,0.2);background:rgba(127,255,0,0.05)">youtube</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+  </div>
+
+  <div class="home-section-label">Neural Score — Meta TRIBE v2</div>
+  <div class="home-grid" style="grid-template-columns:1fr 1fr 1fr">
+    <div class="fcard" data-color="tribe" data-panel="score_script" style="animation-delay:0.22s">
+      <div class="fcard-status" id="fcs-score_script"></div>
+      <div class="fcard-num">04</div>
+      <span class="fcard-icon">🧠</span>
+      <div class="fcard-title">TRIBE v2 — Script</div>
+      <div class="fcard-desc">Meta's brain encoding model predicts fMRI neural activation from your script. Know if it goes viral before filming a single frame. 20,484 cortical vertices analyzed second by second.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-tribe);border-color:rgba(191,95,255,0.2);background:rgba(191,95,255,0.05)">fMRI</span>
+        <span class="fcard-tag" style="color:var(--clr-tribe);border-color:rgba(191,95,255,0.2);background:rgba(191,95,255,0.05)">20,484 vertices</span>
+        <span class="fcard-tag" style="color:var(--clr-tribe);border-color:rgba(191,95,255,0.2);background:rgba(191,95,255,0.05)">pre-film</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+
+    <div class="fcard" data-color="tribe" data-panel="suggestions" style="animation-delay:0.28s">
+      <div class="fcard-status" id="fcs-suggestions"></div>
+      <div class="fcard-num">04B</div>
+      <span class="fcard-icon">🤖</span>
+      <div class="fcard-title">AI Suggestions</div>
+      <div class="fcard-desc">Claude reads your TRIBE v2 weak seconds and gives specific creative fixes. Exact words, exact edits, exact cuts.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-tribe);border-color:rgba(191,95,255,0.2);background:rgba(191,95,255,0.05)">Claude</span>
+        <span class="fcard-tag" style="color:var(--clr-tribe);border-color:rgba(191,95,255,0.2);background:rgba(191,95,255,0.05)">script fixes</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+
+    <div class="fcard" data-color="video" data-panel="score_video" style="animation-delay:0.26s">
+      <div class="fcard-status" id="fcs-score_video"></div>
+      <div class="fcard-num">05</div>
+      <span class="fcard-icon">🎥</span>
+      <div class="fcard-title">TRIBE v2 — Video</div>
+      <div class="fcard-desc">Upload your recording. TRIBE v2 analyzes voice energy, pacing, audio dynamics. Second-by-second brain activation map. Score any time range you select.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-video);border-color:rgba(255,107,0,0.2);background:rgba(255,107,0,0.05)">video</span>
+        <span class="fcard-tag" style="color:var(--clr-video);border-color:rgba(255,107,0,0.2);background:rgba(255,107,0,0.05)">time range</span>
+        <span class="fcard-tag" style="color:var(--clr-video);border-color:rgba(255,107,0,0.2);background:rgba(255,107,0,0.05)">brain map</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+  </div>
+
+  <div class="home-section-label">Publish</div>
+  <div class="home-grid home-grid-2">
+    <div class="fcard" data-color="publish" data-panel="metadata" style="animation-delay:0.30s">
+      <div class="fcard-status" id="fcs-metadata"></div>
+      <div class="fcard-num">06</div>
+      <span class="fcard-icon">📊</span>
+      <div class="fcard-title">Metadata</div>
+      <div class="fcard-desc">Titles, description, tags, thumbnail concept, optimal post time. Everything to maximize algorithmic reach.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-publish);border-color:rgba(0,255,240,0.2);background:rgba(0,255,240,0.05)">SEO</span>
+        <span class="fcard-tag" style="color:var(--clr-publish);border-color:rgba(0,255,240,0.2);background:rgba(0,255,240,0.05)">tags</span>
+        <span class="fcard-tag" style="color:var(--clr-publish);border-color:rgba(0,255,240,0.2);background:rgba(0,255,240,0.05)">thumbnail</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+
+    <div class="fcard" data-color="publish" data-panel="repurpose" style="animation-delay:0.34s">
+      <div class="fcard-status" id="fcs-repurpose"></div>
+      <div class="fcard-num">07</div>
+      <span class="fcard-icon">✂️</span>
+      <div class="fcard-title">Repurpose</div>
+      <div class="fcard-desc">One video becomes seven. Cuts your script into Reels, Shorts, and TikTok clips. Maximum content from minimum effort.</div>
+      <div class="fcard-tags">
+        <span class="fcard-tag" style="color:var(--clr-publish);border-color:rgba(0,255,240,0.2);background:rgba(0,255,240,0.05)">×7 content</span>
+        <span class="fcard-tag" style="color:var(--clr-publish);border-color:rgba(0,255,240,0.2);background:rgba(0,255,240,0.05)">clips</span>
+      </div>
+      <div class="fcard-arrow">↗</div>
+    </div>
+  </div>
+
+  <div style="height:40px"></div>
+</div><!-- /home -->
+
+
+<!-- ───── PANEL PAGES ─────────────────────────────────── -->
+
+<!-- Settings -->
+<div class="panel-page" id="panel-settings">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-eyebrow" style="color:var(--clr-research)">Config — 00</div>
+      <div class="ph-title">Initialize System</div>
+      <div class="ph-sub">Set your niche and platform. Every agent calibrates automatically.</div>
+      <div class="field"><label>Niche</label><input type="text" id="niche" placeholder="tech, finance, fitness..." value="tech"></div>
+      <div class="field"><label>Platform</label><select id="platform"><option value="youtube">YouTube</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option></select></div>
+      <div class="field"><label>Channel style</label><select id="channel_style"><option value="educational">Educational</option><option value="entertainment">Entertainment</option><option value="news">News</option><option value="tutorials">Tutorials</option></select></div>
+      <button class="btn btn-primary" style="background:var(--clr-research)" onclick="saveSettings()">⚡ Initialize</button>
+    </div>
+    <div class="panel-sidebar">
+      <div class="widget-label">Log</div>
+      <div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>System</div><div class="syslog-body" id="log-settings"></div></div>
+    </div>
   </div>
 </div>
 
-<!-- Layout -->
-<div class="layout">
-
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sidebar-label">Setup</div>
-    <div class="nav-item active" onclick="showPanel('settings')" id="nav-settings">
-      <span class="dot"></span> Settings
-    </div>
-
-    <div class="sidebar-label">Pipeline</div>
-    <div class="nav-item" onclick="showPanel('research')" id="nav-research">
-      <span class="dot"></span> Research
-    </div>
-    <div class="nav-item" onclick="showPanel('hooks')" id="nav-hooks">
-      <span class="dot"></span> Hook factory
-    </div>
-    <div class="nav-item" onclick="showPanel('script')" id="nav-script">
-      <span class="dot"></span> Script engine
-    </div>
-
-    <div class="sidebar-label">Score</div>
-    <div class="nav-item" onclick="showPanel('score')" id="nav-score">
-      <span class="dot"></span> TRIBE v2 score
-    </div>
-
-    <div class="sidebar-label">Publish</div>
-    <div class="nav-item" onclick="showPanel('metadata')" id="nav-metadata">
-      <span class="dot"></span> Metadata
-    </div>
-    <div class="nav-item" onclick="showPanel('repurpose')" id="nav-repurpose">
-      <span class="dot"></span> Repurpose
-    </div>
-  </div>
-
-  <!-- Main -->
-  <div class="main">
-
-    <!-- Settings Panel -->
-    <div class="panel active" id="panel-settings">
-      <div class="panel-title">Settings</div>
-      <div class="panel-sub">Set your niche and platform. Every agent adapts to these.</div>
-      <div class="field">
-        <label>Your niche</label>
-        <input type="text" id="niche" placeholder="e.g. tech, finance, fitness, cooking" value="tech">
+<!-- Research -->
+<div class="panel-page" id="panel-research">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div><div class="ph-eyebrow" style="color:var(--clr-research)">Agent 01 — Research</div><div class="ph-title">Scanning the algorithm</div><div class="ph-sub">Finding what the internet wants before your competitors do.</div></div>
+        <span class="badge" id="badge-research">standby</span>
       </div>
-      <div class="field">
-        <label>Platform</label>
-        <select id="platform">
-          <option value="youtube">YouTube</option>
-          <option value="instagram">Instagram</option>
-          <option value="tiktok">TikTok</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Channel style</label>
-        <select id="channel_style">
-          <option value="educational">Educational</option>
-          <option value="entertainment">Entertainment</option>
-          <option value="news">News</option>
-          <option value="tutorials">Tutorials</option>
-        </select>
-      </div>
-      <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+      <button class="btn btn-primary" id="btn-research" style="background:var(--clr-research)" onclick="runAgent('research')">🔍 Launch scan</button>
+      <div class="sel-list" id="list-research"></div>
+      <div class="terminal"><div class="term-header"><div class="term-dot" style="background:#ff5f57"></div><div class="term-dot" style="background:#febc2e"></div><div class="term-dot" style="background:#28c840"></div><span class="term-name">research_agent.output</span></div><div class="term-body" id="out-research">Awaiting launch...<span class="cursor"></span></div></div>
     </div>
-
-    <!-- Research Panel -->
-    <div class="panel" id="panel-research">
-      <div class="agent-header">
-        <div>
-          <div class="agent-tag">Agent 1</div>
-          <div class="panel-title">Research</div>
-          <div class="panel-sub">Finds the 5 best topic ideas for your niche right now.</div>
-        </div>
-        <span class="agent-status" id="status-research">idle</span>
-      </div>
-      <button class="btn btn-primary" id="btn-research" onclick="runAgent('research')">
-        Run research agent
-      </button>
-      <div class="selector-grid" id="topics-list"></div>
-      <div class="output-box" id="output-research">Output will appear here...</div>
+    <div class="panel-sidebar">
+      <div class="widget-label">Metrics</div>
+      <div class="metric-card"><div class="metric-card-label">Topics found</div><div class="metric-card-value" id="mv-research" style="color:var(--clr-research)">—</div><div class="metric-card-sub">trending now</div></div>
+      <div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>Log</div><div class="syslog-body" id="log-research"></div></div>
     </div>
-
-    <!-- Hooks Panel -->
-    <div class="panel" id="panel-hooks">
-      <div class="agent-header">
-        <div>
-          <div class="agent-tag">Agent 2</div>
-          <div class="panel-title">Hook factory</div>
-          <div class="panel-sub">Generates 8 hooks for your selected topic.</div>
-        </div>
-        <span class="agent-status" id="status-hooks">idle</span>
-      </div>
-      <div id="hooks-topic-display" style="font-size:13px;color:#555;margin-bottom:16px;">Select a topic first from Research.</div>
-      <button class="btn btn-primary" id="btn-hooks" onclick="runAgent('hooks')" disabled>
-        Generate hooks
-      </button>
-      <div class="selector-grid" id="hooks-list"></div>
-      <div class="output-box" id="output-hooks">Output will appear here...</div>
-    </div>
-
-    <!-- Script Panel -->
-    <div class="panel" id="panel-script">
-      <div class="agent-header">
-        <div>
-          <div class="agent-tag">Agent 3</div>
-          <div class="panel-title">Script engine</div>
-          <div class="panel-sub">Writes your full video script from the selected hook.</div>
-        </div>
-        <span class="agent-status" id="status-script">idle</span>
-      </div>
-      <div id="script-hook-display" style="font-size:13px;color:#555;margin-bottom:16px;">Select a hook first from Hook factory.</div>
-      <button class="btn btn-primary" id="btn-script" onclick="runAgent('script')" disabled>
-        Generate script
-      </button>
-      <div class="output-box" id="output-script">Output will appear here...</div>
-    </div>
-
-    <!-- Score Panel -->
-    <div class="panel" id="panel-score">
-      <div class="agent-header">
-        <div>
-          <div class="agent-tag">TRIBE v2</div>
-          <div class="panel-title">Virality score</div>
-          <div class="panel-sub">Predicts neural activation before you film a single frame.</div>
-        </div>
-        <span class="agent-status" id="status-score">idle</span>
-      </div>
-      <button class="btn btn-primary" id="btn-score" onclick="runAgent('score')">
-        Score my script
-      </button>
-      <div class="score-grid" id="score-grid" style="display:none">
-        <div class="score-card">
-          <div class="score-val" id="sc-hook">—</div>
-          <div class="score-label">Hook strength</div>
-        </div>
-        <div class="score-card">
-          <div class="score-val" id="sc-retention">—</div>
-          <div class="score-label">Retention score</div>
-        </div>
-        <div class="score-card">
-          <div class="score-val" id="sc-viral">—</div>
-          <div class="score-label">Viral probability</div>
-        </div>
-      </div>
-      <div id="verdict-area"></div>
-      <div class="improvements" id="improvements-list"></div>
-    </div>
-
-    <!-- Metadata Panel -->
-    <div class="panel" id="panel-metadata">
-      <div class="agent-header">
-        <div>
-          <div class="agent-tag">Agent 5</div>
-          <div class="panel-title">Metadata</div>
-          <div class="panel-sub">Titles, description, tags, thumbnail concept, post time.</div>
-        </div>
-        <span class="agent-status" id="status-metadata">idle</span>
-      </div>
-      <button class="btn btn-primary" id="btn-metadata" onclick="runAgent('metadata')">
-        Generate metadata
-      </button>
-      <div class="output-box" id="output-metadata">Output will appear here...</div>
-    </div>
-
-    <!-- Repurpose Panel -->
-    <div class="panel" id="panel-repurpose">
-      <div class="agent-header">
-        <div>
-          <div class="agent-tag">Agent 6</div>
-          <div class="panel-title">Repurpose</div>
-          <div class="panel-sub">Cuts your script into Reels, Shorts and TikTok clips.</div>
-        </div>
-        <span class="agent-status" id="status-repurpose">idle</span>
-      </div>
-      <button class="btn btn-primary" id="btn-repurpose" onclick="runAgent('repurpose')">
-        Repurpose content
-      </button>
-      <div class="output-box" id="output-repurpose">Output will appear here...</div>
-    </div>
-
   </div>
 </div>
 
-<!-- Toast -->
+<!-- Hooks -->
+<div class="panel-page" id="panel-hooks">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div><div class="ph-eyebrow" style="color:var(--clr-hooks)">Agent 02 — Hook Factory</div><div class="ph-title">Engineering the scroll stop</div><div class="ph-sub">8 psychological triggers. Every hook is a weapon.</div></div>
+        <span class="badge" id="badge-hooks">standby</span>
+      </div>
+      <div id="hint-hooks" style="font-family:var(--font-mono);font-size:11px;color:var(--txt-secondary);margin-bottom:12px">▶ Select topic from Research first</div>
+      <button class="btn btn-primary" id="btn-hooks" style="background:var(--clr-hooks)" onclick="runAgent('hooks')" disabled>🎣 Generate hooks</button>
+      <div class="sel-list" id="list-hooks"></div>
+      <div class="terminal"><div class="term-header"><div class="term-dot" style="background:#ff5f57"></div><div class="term-dot" style="background:#febc2e"></div><div class="term-dot" style="background:#28c840"></div><span class="term-name">hook_factory.output</span></div><div class="term-body" id="out-hooks">Awaiting topic...<span class="cursor"></span></div></div>
+    </div>
+    <div class="panel-sidebar">
+      <div class="widget-label">Metrics</div>
+      <div class="metric-card"><div class="metric-card-label">Hooks generated</div><div class="metric-card-value" id="mv-hooks" style="color:var(--clr-hooks)">—</div><div class="metric-card-sub">unique angles</div></div>
+      <div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>Log</div><div class="syslog-body" id="log-hooks"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Script short -->
+<div class="panel-page" id="panel-script">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div><div class="ph-eyebrow" style="color:var(--clr-script)">Agent 03 — Short Script</div><div class="ph-title">Writing your 30-second weapon</div><div class="ph-sub">Every second intentional. Built for Reels, Shorts, TikTok.</div></div>
+        <span class="badge" id="badge-script">standby</span>
+      </div>
+      <div id="hint-script" style="font-family:var(--font-mono);font-size:11px;color:var(--txt-secondary);margin-bottom:12px">▶ Select hook first</div>
+      <button class="btn btn-primary" id="btn-script" style="background:var(--clr-script);color:#000" onclick="runAgent('script')" disabled>✍️ Write script</button>
+      <div class="terminal"><div class="term-header"><div class="term-dot" style="background:#ff5f57"></div><div class="term-dot" style="background:#febc2e"></div><div class="term-dot" style="background:#28c840"></div><span class="term-name">script_engine.output</span></div><div class="term-body" id="out-script">Awaiting hook...<span class="cursor"></span></div></div>
+    </div>
+    <div class="panel-sidebar">
+      <div class="widget-label">Target</div>
+      <div class="metric-card"><div class="metric-card-label">Duration</div><div class="metric-card-value" style="color:var(--clr-script)">30s</div><div class="metric-card-sub">reels / shorts</div></div>
+      <div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>Log</div><div class="syslog-body" id="log-script"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Script long -->
+<div class="panel-page" id="panel-script_long">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div><div class="ph-eyebrow" style="color:var(--clr-script)">Agent 03B — YouTube Script</div><div class="ph-title">Full 10-minute blueprint</div><div class="ph-sub">Pattern interrupts every 60s. B-roll cues. Timestamps. Every minute planned.</div></div>
+        <span class="badge" id="badge-script_long">standby</span>
+      </div>
+      <div id="hint-script_long" style="font-family:var(--font-mono);font-size:11px;color:var(--txt-secondary);margin-bottom:12px">▶ Select hook first</div>
+      <button class="btn btn-primary" id="btn-script_long" style="background:var(--clr-script);color:#000" onclick="runAgent('script_long')" disabled>✍️ YouTube script</button>
+      <div class="terminal"><div class="term-header"><div class="term-dot" style="background:#ff5f57"></div><div class="term-dot" style="background:#febc2e"></div><div class="term-dot" style="background:#28c840"></div><span class="term-name">youtube_script.output</span></div><div class="term-body" id="out-script_long">Awaiting hook...<span class="cursor"></span></div></div>
+    </div>
+    <div class="panel-sidebar">
+      <div class="widget-label">Target</div>
+      <div class="metric-card"><div class="metric-card-label">Duration</div><div class="metric-card-value" style="color:var(--clr-script)">10m</div><div class="metric-card-sub">youtube</div></div>
+      <div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>Log</div><div class="syslog-body" id="log-script_long"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TRIBE Script -->
+<div class="panel-page" id="panel-score_script">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div><div class="ph-eyebrow" style="color:var(--clr-tribe)">TRIBE v2 — Script Score</div><div class="ph-title">Reading 20,484 brain vertices</div><div class="ph-sub">Meta's brain encoding model. Know if it goes viral before filming a single frame.</div></div>
+        <span class="badge" id="badge-score_script">standby</span>
+      </div>
+      <div class="field"><label>Colab ngrok URL</label><input type="text" id="tribe_url_script" placeholder="https://xxxx.ngrok-free.app"></div>
+      <div class="field"><label>Script</label><textarea id="script_input" placeholder="Paste your script..."></textarea></div>
+      <button class="btn btn-primary" id="btn-score_script" style="background:var(--clr-tribe)" onclick="runScriptScore()">🧠 Run neural scan</button>
+
+      <div class="progress" id="prog-score_script">
+        <div class="progress-top"><span class="progress-label" id="prog-score_script-text">Initializing...</span><span class="progress-pct" id="prog-score_script-pct" style="color:var(--clr-tribe)">0%</span></div>
+        <div class="progress-track"><div class="progress-fill" id="prog-score_script-bar" style="background:linear-gradient(90deg,var(--clr-tribe),#e879f9)"></div></div>
+        <div class="progress-steps">
+          <div class="pstep" id="ps-s1"><div class="pstep-icon">1</div>TTS conversion</div>
+          <div class="pstep" id="ps-s2"><div class="pstep-icon">2</div>Word-level timings</div>
+          <div class="pstep" id="ps-s3"><div class="pstep-icon">3</div>Wav2Vec-BERT encoder</div>
+          <div class="pstep" id="ps-s4"><div class="pstep-icon">4</div>20,484 cortical vertices</div>
+          <div class="pstep" id="ps-s5"><div class="pstep-icon">5</div>Virality scores</div>
+          <div class="pstep" id="ps-s6"><div class="pstep-icon">6</div>Brain activation maps</div>
+        </div>
+      </div>
+
+      <div class="score-reveal" id="reveal-script">
+        <div class="reveal-header"><span class="reveal-label" style="color:var(--clr-tribe)">▶ Neural scan complete</span><div class="reveal-line" style="background:linear-gradient(90deg,rgba(191,95,255,0.4),transparent)"></div></div>
+        <div class="score-trio" id="trio-script"></div>
+        <div id="verdict-script"></div>
+      </div>
+      <div class="brain-section" id="brain-script">
+        <div class="brain-header"><span class="brain-title">▶ Brain activation timeline</span><span class="brain-badge">Real fMRI · 20,484 vertices</span></div>
+        <div class="brain-box" id="brainbox-script"><div class="brain-loading" id="brainload-script"><div class="brain-spinner"></div>Rendering cortical maps...</div></div>
+      </div>
+      <div class="graph-section" id="graph-script">
+        <div class="graph-header"><span class="graph-title">▶ Neural activation — second by second</span><div class="graph-legend"><div class="graph-legend-item"><div class="graph-legend-dot" style="background:var(--clr-tribe)"></div>Signal</div><div class="graph-legend-item"><div class="graph-legend-dot" style="background:var(--clr-error)"></div>Drop</div></div></div>
+        <div class="graph-box"><canvas id="chart-script" height="110"></canvas></div>
+      </div>
+      <div class="fix-list" id="fixes-script"></div>
+    </div>
+    <div class="panel-sidebar">
+      <div class="widget-label">Live Metrics</div>
+      <div class="metric-card"><div class="metric-card-label">Hook Strength</div><div class="metric-card-value" id="mv-hook">—</div><div class="metric-card-sub">neural activation</div><div class="metric-card-bar"><div class="metric-card-fill" id="mf-hook" style="background:var(--clr-good)"></div></div></div>
+      <div class="metric-card"><div class="metric-card-label">Retention Score</div><div class="metric-card-value" id="mv-ret">—</div><div class="metric-card-sub">avg engagement</div><div class="metric-card-bar"><div class="metric-card-fill" id="mf-ret" style="background:var(--clr-warn)"></div></div></div>
+      <div class="metric-card"><div class="metric-card-label">Viral Probability</div><div class="metric-card-value" id="mv-vir">—</div><div class="metric-card-sub">share likelihood</div><div class="metric-card-bar"><div class="metric-card-fill" id="mf-vir" style="background:var(--clr-tribe)"></div></div></div>
+      <div class="metric-card"><div class="metric-card-label" style="color:var(--clr-tribe)">Overall</div><div class="metric-card-value" id="mv-ov" style="color:var(--clr-tribe)">—</div><div class="metric-card-sub">TRIBE v2</div><div class="metric-card-bar"><div class="metric-card-fill" id="mf-ov" style="background:var(--clr-tribe)"></div></div></div>
+      <div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>Log</div><div class="syslog-body" id="log-score_script"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TRIBE Video -->
+<div class="panel-page" id="panel-score_video">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div><div class="ph-eyebrow" style="color:var(--clr-video)">TRIBE v2 — Video Score</div><div class="ph-title">Scanning your recording</div><div class="ph-sub">Voice energy, pacing, audio dynamics. Second-by-second brain map.</div></div>
+        <span class="badge" id="badge-score_video">standby</span>
+      </div>
+      <div class="field"><label>Colab ngrok URL</label><input type="text" id="tribe_url_video" placeholder="https://xxxx.ngrok-free.app"></div>
+      <div class="field"><label>Video (.mp4)</label><input type="file" id="video_file" accept=".mp4,.mov" onchange="onVideoSelected(this)"></div>
+      <div class="range-wrap" id="range-wrap">
+        <div class="range-label">Select time range to score</div>
+        <div class="range-display"><div class="range-pill" id="range-start-badge">0s</div><span class="range-sep">→</span><div class="range-pill" id="range-end-badge">60s</div></div>
+        <div class="range-track"><div class="range-bg"></div><div class="range-fill" id="range-track-fill"></div><div class="range-handle" id="range-handle-start" style="left:0%"></div><div class="range-handle" id="range-handle-end" style="left:100%"></div><input type="range" class="range-input" id="range-input-start" min="0" max="100" value="0" oninput="updateStartRange()"><input type="range" class="range-input" id="range-input-end" min="0" max="100" value="100" oninput="updateEndRange()"></div>
+        <div class="range-hint" id="range-hint-text">Full video will be scored</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-score_video" style="background:var(--clr-video)" onclick="runVideoScore()">🧠 Run neural scan</button>
+        <button class="btn btn-ghost" id="btn-full-video" onclick="scoreFullVideo()" style="display:none">Full video</button>
+      </div>
+      <div class="progress" id="prog-score_video">
+        <div class="progress-top"><span class="progress-label" id="prog-score_video-text">Uploading...</span><span class="progress-pct" id="prog-score_video-pct" style="color:var(--clr-video)">0%</span></div>
+        <div class="progress-track"><div class="progress-fill" id="prog-score_video-bar" style="background:linear-gradient(90deg,var(--clr-video),#ffaa00)"></div></div>
+        <div class="progress-steps">
+          <div class="pstep" id="ps-v1"><div class="pstep-icon">1</div>Uploading to Colab GPU</div>
+          <div class="pstep" id="ps-v2"><div class="pstep-icon">2</div>Clipping time range</div>
+          <div class="pstep" id="ps-v3"><div class="pstep-icon">3</div>Extracting audio</div>
+          <div class="pstep" id="ps-v4"><div class="pstep-icon">4</div>Wav2Vec-BERT encoder</div>
+          <div class="pstep" id="ps-v5"><div class="pstep-icon">5</div>20,484 brain vertices</div>
+          <div class="pstep" id="ps-v6"><div class="pstep-icon">6</div>Brain activation maps</div>
+        </div>
+      </div>
+      <div class="score-reveal" id="reveal-video">
+        <div class="reveal-header"><span class="reveal-label" style="color:var(--clr-video)">▶ Neural scan complete</span><div class="reveal-line" style="background:linear-gradient(90deg,rgba(255,107,0,0.4),transparent)"></div></div>
+        <div class="score-trio" id="trio-video"></div>
+        <div id="verdict-video"></div>
+      </div>
+      <div class="brain-section" id="brain-video">
+        <div class="brain-header"><span class="brain-title">▶ Brain activation timeline</span><span class="brain-badge">Real fMRI · 20,484 vertices</span></div>
+        <div class="brain-box" id="brainbox-video"><div class="brain-loading" id="brainload-video"><div class="brain-spinner"></div>Rendering cortical maps...</div></div>
+      </div>
+      <div class="graph-section" id="graph-video">
+        <div class="graph-header"><span class="graph-title">▶ Neural activation — second by second</span><div class="graph-legend"><div class="graph-legend-item"><div class="graph-legend-dot" style="background:var(--clr-video)"></div>Signal</div><div class="graph-legend-item"><div class="graph-legend-dot" style="background:var(--clr-error)"></div>Drop</div></div></div>
+        <div class="graph-box"><canvas id="chart-video" height="110"></canvas></div>
+      </div>
+      <div class="fix-list" id="fixes-video"></div>
+    </div>
+    <div class="panel-sidebar">
+      <div class="widget-label">Live Metrics</div>
+      <div class="metric-card"><div class="metric-card-label">Hook Strength</div><div class="metric-card-value" id="mv-hook-v">—</div><div class="metric-card-sub">neural activation</div><div class="metric-card-bar"><div class="metric-card-fill" id="mf-hook-v" style="background:var(--clr-good)"></div></div></div>
+      <div class="metric-card"><div class="metric-card-label">Retention</div><div class="metric-card-value" id="mv-ret-v">—</div><div class="metric-card-sub">avg engagement</div><div class="metric-card-bar"><div class="metric-card-fill" id="mf-ret-v" style="background:var(--clr-warn)"></div></div></div>
+      <div class="metric-card"><div class="metric-card-label">Viral Probability</div><div class="metric-card-value" id="mv-vir-v">—</div><div class="metric-card-sub">share likelihood</div><div class="metric-card-bar"><div class="metric-card-fill" id="mf-vir-v" style="background:var(--clr-video)"></div></div></div>
+      <div class="metric-card"><div class="metric-card-label" style="color:var(--clr-video)">Overall</div><div class="metric-card-value" id="mv-ov-v" style="color:var(--clr-video)">—</div><div class="metric-card-sub">TRIBE v2</div><div class="metric-card-bar"><div class="metric-card-fill" id="mf-ov-v" style="background:var(--clr-video)"></div></div></div>
+      <div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>Log</div><div class="syslog-body" id="log-score_video"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Metadata -->
+<div class="panel-page" id="panel-metadata">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div><div class="ph-eyebrow" style="color:var(--clr-publish)">Agent 06 — Metadata</div><div class="ph-title">Optimizing for the algorithm</div><div class="ph-sub">Titles, description, tags, thumbnail concept, optimal post time.</div></div>
+        <span class="badge" id="badge-metadata">standby</span>
+      </div>
+      <button class="btn btn-primary" id="btn-metadata" style="background:var(--clr-publish);color:#000" onclick="runAgent('metadata')">📊 Generate metadata</button>
+      <div class="terminal"><div class="term-header"><div class="term-dot" style="background:#ff5f57"></div><div class="term-dot" style="background:#febc2e"></div><div class="term-dot" style="background:#28c840"></div><span class="term-name">metadata_agent.output</span></div><div class="term-body" id="out-metadata">Awaiting script...<span class="cursor"></span></div></div>
+    </div>
+    <div class="panel-sidebar"><div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>Log</div><div class="syslog-body" id="log-metadata"></div></div></div>
+  </div>
+</div>
+
+<!-- Repurpose -->
+<div class="panel-page" id="panel-repurpose">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div><div class="ph-eyebrow" style="color:var(--clr-publish)">Agent 07 — Repurpose</div><div class="ph-title">Multiplying your content</div><div class="ph-sub">One video becomes seven. Reels, Shorts, TikTok clips.</div></div>
+        <span class="badge" id="badge-repurpose">standby</span>
+      </div>
+      <button class="btn btn-primary" id="btn-repurpose" style="background:var(--clr-publish);color:#000" onclick="runAgent('repurpose')">✂️ Repurpose</button>
+      <div class="terminal"><div class="term-header"><div class="term-dot" style="background:#ff5f57"></div><div class="term-dot" style="background:#febc2e"></div><div class="term-dot" style="background:#28c840"></div><span class="term-name">repurpose_agent.output</span></div><div class="term-body" id="out-repurpose">Awaiting script...<span class="cursor"></span></div></div>
+    </div>
+    <div class="panel-sidebar"><div class="syslog"><div class="syslog-header"><span class="syslog-dot"></span>Log</div><div class="syslog-body" id="log-repurpose"></div></div></div>
+  </div>
+</div>
+<!-- Suggestions -->
+<div class="panel-page" id="panel-suggestions">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div>
+          <div class="ph-eyebrow" style="color:var(--clr-tribe)">Agent 04B — AI Suggestions</div>
+          <div class="ph-title">Claude analyzes weak moments</div>
+          <div class="ph-sub">Reads your TRIBE v2 scores and script. Gives specific creative fixes for every weak second.</div>
+        </div>
+        <span class="badge" id="badge-suggestions">standby</span>
+      </div>
+      <button class="btn btn-primary" id="btn-suggestions" style="background:var(--clr-tribe)" onclick="runAgent('suggestions')">🤖 Get AI suggestions</button>
+      <div class="terminal">
+        <div class="term-header">
+          <div class="term-dot" style="background:#ff5f57"></div>
+          <div class="term-dot" style="background:#febc2e"></div>
+          <div class="term-dot" style="background:#28c840"></div>
+          <span class="term-name">suggestion_agent.output</span>
+        </div>
+        <div class="term-body" id="out-suggestions">Run TRIBE v2 first, then click Get AI suggestions...<span class="cursor"></span></div>
+      </div>
+    </div>
+    <div class="panel-sidebar">
+      <div class="syslog">
+        <div class="syslog-header"><span class="syslog-dot"></span>Log</div>
+        <div class="syslog-body" id="log-suggestions"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="panel-page" id="panel-autopilot">
+  <div class="panel-layout">
+    <div class="panel-main">
+      <div class="ph-row">
+        <div>
+          <div class="ph-eyebrow" style="color:var(--clr-publish)">Agent 08 — Autopilot</div>
+          <div class="ph-title">Full pipeline, one click</div>
+          <div class="ph-sub">Claude runs research, picks the best topic and hook, writes your script, generates suggestions — then sends everything to Telegram.</div>
+        </div>
+        <span class="badge" id="badge-autopilot">standby</span>
+      </div>
+      <div style="display:flex;gap:12px;margin-bottom:16px">
+        <button class="btn btn-primary" id="btn-autopilot" style="background:var(--clr-publish);color:#000" onclick="runAgent('autopilot')">🤖 Run autopilot</button>
+        <button class="btn btn-ghost" id="btn-send-telegram" onclick="sendToTelegram()" style="display:none">📱 Send to Telegram</button>
+      </div>
+
+      <div id="autopilot-progress" style="display:none;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--sp-md);margin-bottom:var(--sp-sm)">
+  <div style="display:flex;justify-content:space-between;margin-bottom:9px">
+    <span style="font-family:var(--font-mono);font-size:10px;color:var(--txt-secondary)" id="ap-step-label">Starting...</span>
+    <span style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:var(--clr-publish)" id="ap-step-pct">0%</span>
+  </div>
+  <div style="height:3px;background:var(--bg-overlay);border-radius:2px;overflow:hidden;margin-bottom:var(--sp-sm)">
+    <div id="ap-progress-bar" style="height:100%;border-radius:2px;width:0%;background:linear-gradient(90deg,var(--clr-publish),var(--clr-tribe));transition:width 0.5s ease"></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <div class="pstep" id="ap-s1"><div class="pstep-icon">1</div>Research — scanning trending topics</div>
+    <div class="pstep" id="ap-s2"><div class="pstep-icon">2</div>Selecting best topic</div>
+    <div class="pstep" id="ap-s3"><div class="pstep-icon">3</div>Hook Factory — generating 8 hooks</div>
+    <div class="pstep" id="ap-s4"><div class="pstep-icon">4</div>Selecting best hook</div>
+    <div class="pstep" id="ap-s5"><div class="pstep-icon">5</div>Writing script</div>
+    <div class="pstep" id="ap-s6"><div class="pstep-icon">6</div>AI Suggestions — analyzing weak moments</div>
+    <div class="pstep" id="ap-s7"><div class="pstep-icon">7</div>Writing summary + sending to Telegram</div>
+  </div>
+</div>
+
+
+<!-- Cron Scheduler -->
+<div style="background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:var(--sp-md);margin-bottom:var(--sp-md)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-md)">
+    <div>
+      <div style="font-family:var(--font-mono);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--clr-publish);margin-bottom:3px">⏰ Daily Scheduler</div>
+      <div style="font-size:13px;font-weight:700;color:var(--txt-primary)">Morning Brief Automation</div>
+      <div style="font-size:11px;color:var(--txt-secondary);margin-top:2px">Autopilot runs every day at your set time</div>
+    </div>
+    <div id="cron-status-badge" class="badge">loading...</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:var(--sp-sm);align-items:end">
+    <div class="field" style="margin-bottom:0">
+      <label>Hour (0–23)</label>
+      <input type="number" id="cron-hour" min="0" max="23" value="8" placeholder="8">
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>Minute (0–59)</label>
+      <input type="number" id="cron-minute" min="0" max="59" value="0" placeholder="0">
+    </div>
+    <button class="btn btn-primary" style="background:var(--clr-publish);color:#000;white-space:nowrap" onclick="setCron()">⏰ Set schedule</button>
+    <button class="btn btn-ghost" style="white-space:nowrap" onclick="removeCron()">✕ Remove</button>
+  </div>
+
+  <div id="cron-next-run" style="font-family:var(--font-mono);font-size:9px;color:var(--txt-muted);margin-top:var(--sp-sm);text-align:center"></div>
+</div>
+
+
+      <div class="terminal">
+        <div class="term-header">
+          <div class="term-dot" style="background:#ff5f57"></div>
+          <div class="term-dot" style="background:#febc2e"></div>
+          <div class="term-dot" style="background:#28c840"></div>
+          <span class="term-name">autopilot.output</span>
+        </div>
+        <div class="term-body" id="out-autopilot">Waiting for launch...<span class="cursor"></span></div>
+      </div>
+    </div>
+    <div class="panel-sidebar">
+      <div class="metric-card">
+        <div class="metric-card-label">Status</div>
+        <div class="metric-card-value" id="mv-autopilot" style="color:var(--clr-publish);font-size:14px">Idle</div>
+        <div class="metric-card-sub">pipeline status</div>
+      </div>
+      <div class="syslog">
+        <div class="syslog-header"><span class="syslog-dot"></span>Log</div>
+        <div class="syslog-body" id="log-autopilot"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+</div><!-- /viewport -->
+</div><!-- /app -->
+
 <div class="toast" id="toast"></div>
 
 <script>
-let selectedTopic = null;
-let selectedHook  = null;
-
-// ── Navigation ──────────────────────────────────────────────
-function showPanel(name) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
-  document.getElementById('nav-' + name).classList.add('active');
-  if (name === 'score') loadScores();
-}
-
-// ── Toast ────────────────────────────────────────────────────
-function showToast(msg, type = '') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show ' + type;
-  setTimeout(() => t.className = 'toast', 2500);
-}
-
-// ── Save Settings ────────────────────────────────────────────
-async function saveSettings() {
-  const body = {
-    niche:         document.getElementById('niche').value,
-    platform:      document.getElementById('platform').value,
-    channel_style: document.getElementById('channel_style').value,
-  };
-  const res  = await fetch('/api/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+/* ── Particles ─────────────────────────────────────────── */
+const bgC=document.getElementById('bgCanvas'),bgX=bgC.getContext('2d');
+let bW,bH,pts=[],mouse={x:0,y:0};
+function resizeBg(){bW=bgC.width=innerWidth;bH=bgC.height=innerHeight}
+resizeBg();addEventListener('resize',resizeBg);
+const pColors=['#00d4ff','#bf5fff','#ff006e','#7fff00','#ff6b00','#00fff0'];
+for(let i=0;i<52;i++)pts.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35,r:Math.random()*1.4+.4,c:pColors[Math.floor(Math.random()*pColors.length)],a:Math.random()*.32+.07});
+const orbs=[
+  {x:150,y:250,r:380,c:'#00d4ff',a:0.09},
+  {x:0,y:0,r:420,c:'#bf5fff',a:0.08},
+  {x:0,y:0,r:320,c:'#ff006e',a:0.07},
+  {x:0,y:0,r:280,c:'#7fff00',a:0.05}
+];
+function animPts(){
+  bgX.clearRect(0,0,bW,bH);
+  orbs[1].x=bW-150;orbs[1].y=350;
+orbs[2].x=bW/2;orbs[2].y=bH-150;
+orbs[3].x=bW*0.75;orbs[3].y=bH*0.3;
+  orbs.forEach(o=>{
+    const g=bgX.createRadialGradient(o.x,o.y,0,o.x,o.y,o.r);
+    g.addColorStop(0,o.c+(Math.floor(o.a*255).toString(16).padStart(2,'0')));
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    bgX.beginPath();bgX.arc(o.x,o.y,o.r,0,Math.PI*2);
+    bgX.fillStyle=g;bgX.fill();
   });
-  const data = await res.json();
-  if (data.status === 'ok') showToast('Settings saved', 'success');
-  else showToast('Error saving settings', 'error');
+  pts.forEach(p=>{
+    const dx=mouse.x-p.x,dy=mouse.y-p.y,d=Math.sqrt(dx*dx+dy*dy);
+    if(d<130){p.vx-=(dx/d)*.07;p.vy-=(dy/d)*.07}
+    p.vx*=.99;p.vy*=.99;p.x+=p.vx;p.y+=p.vy;
+    if(p.x<0)p.x=bW;if(p.x>bW)p.x=0;if(p.y<0)p.y=bH;if(p.y>bH)p.y=0;
+    bgX.beginPath();bgX.arc(p.x,p.y,p.r,0,Math.PI*2);
+    bgX.fillStyle=p.c+(Math.floor(p.a*255).toString(16).padStart(2,'0'));bgX.fill();
+  });requestAnimationFrame(animPts);
+}
+animPts();
+addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY});
+
+/* ── Ripple ─────────────────────────────────────────────── */
+document.addEventListener('click',e=>{
+  const r=document.createElement('div');r.className='ripple';const s=120;
+  r.style.cssText=`width:${s}px;height:${s}px;left:${e.clientX-s/2}px;top:${e.clientY-s/2}px`;
+  document.body.appendChild(r);r.addEventListener('animationend',()=>r.remove());
+});
+
+/* ── Screen flash ───────────────────────────────────────── */
+function flash(color){const f=document.getElementById('flashOverlay');f.style.background=color;f.style.opacity='.14';setTimeout(()=>f.style.opacity='0',180)}
+
+/* ── State ──────────────────────────────────────────────── */
+let selTopic=null,selHook=null,vidDur=0,startSec=0,endSec=0;
+const t0=Date.now();
+function ts(){const e=Math.floor((Date.now()-t0)/1000);return`${String(Math.floor(e/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`}
+
+function log(msg,type='',id='log-score_script'){
+  const el=document.getElementById(id);if(!el)return;
+  const e=document.createElement('div');e.className='log-entry';
+  e.innerHTML=`<span class="log-ts">${ts()}</span><span class="log-msg ${type}">${msg}</span>`;
+  el.appendChild(e);el.scrollTop=el.scrollHeight;
 }
 
-// ── Run Agent ────────────────────────────────────────────────
-async function runAgent(name) {
-  const btn    = document.getElementById('btn-' + name);
-  const status = document.getElementById('status-' + name);
-  const navItem = document.getElementById('nav-' + name);
+function toast(msg,type=''){
+  const t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+type;
+  setTimeout(()=>t.className='toast',3000);
+}
 
-  btn.disabled     = true;
-  btn.textContent  = 'Running...';
-  status.textContent = 'running';
-  status.className   = 'agent-status running';
-  navItem.className  = navItem.className.replace('done','') + ' running';
+/* ── Card click → open panel ────────────────────────────── */
+document.querySelectorAll('.fcard').forEach(card=>{
+  card.addEventListener('click',()=>openPanel(card.dataset.panel));
+});
 
-  const body = {};
-  if (name === 'hooks')  body.selected_topic = selectedTopic;
-  if (name === 'script') body.selected_hook  = selectedHook;
+function goHome(){
+  document.getElementById('homePage').style.display='block';
+  document.querySelectorAll('.panel-page').forEach(p=>p.classList.remove('visible'));
+  document.getElementById('backBtn').classList.remove('visible');
+  flash('rgba(0,212,255,0.08)');
+}
 
+function openPanel(name){
+  document.getElementById('homePage').style.display='none';
+  document.querySelectorAll('.panel-page').forEach(p=>p.classList.remove('visible'));
+  const pg=document.getElementById('panel-'+name);if(!pg)return;
+  pg.classList.add('visible');
+  document.getElementById('backBtn').classList.add('visible');
+  const outs=['research','hooks','script','script_long','metadata','repurpose'];
+  if(outs.includes(name))setTimeout(()=>loadOutput(name),80);
+}
+
+function setCardStatus(name,state){
+  const el=document.getElementById('fcs-'+name);if(!el)return;
+  el.className='fcard-status '+(state||'');
+  const card=document.querySelector(`[data-panel="${name}"]`);
+  if(card){card.classList.remove('card-running');if(state==='running')card.classList.add('card-running');}
+}
+
+async function runAutopilotHero(){
+  const btn=document.getElementById('hero-btn-autopilot');
+  const status=document.getElementById('hero-autopilot-status');
+  btn.disabled=true;btn.textContent='⟳ Running...';
+  status.textContent='Pipeline running...';
+  document.getElementById('fc-autopilot').classList.add('card-running');
+  setCardStatus('autopilot','running');
+  try{
+    const r=await fetch('/api/run/autopilot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    const d=await r.json();
+    if(d.status==='ok'){
+      document.getElementById('fc-autopilot').classList.remove('card-running');
+      setCardStatus('autopilot','done');
+      status.textContent='Complete ✓';
+      btn.textContent='🔁 Run again';
+      document.getElementById('hero-tg-btn').style.display='inline-flex';
+      flash('#00fff0');toast('Autopilot complete! Sending to Telegram...','success');
+      sendToTelegram();
+    }else{
+      document.getElementById('fc-autopilot').classList.remove('card-running');
+      setCardStatus('autopilot','');
+      status.textContent='Error — try again';
+      btn.textContent='🤖 Run Autopilot';
+      toast('Autopilot failed','error');
+    }
+  }catch(e){
+    document.getElementById('fc-autopilot').classList.remove('card-running');
+    status.textContent='Server error';
+    btn.textContent='🤖 Run Autopilot';
+    toast('Server error','error');
+  }
+  btn.disabled=false;
+}
+
+
+
+async function sendToTelegram() {
+  const btn = document.getElementById('btn-send-telegram');
+  btn.disabled = true;
+  btn.textContent = '📱 Sending...';
   try {
-    const res  = await fetch('/api/run/' + name, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
+    const res = await fetch('/api/send_telegram', {method:'POST'});
     const data = await res.json();
-
     if (data.status === 'ok') {
-      status.textContent = 'done';
-      status.className   = 'agent-status done';
-      navItem.classList.remove('running');
-      navItem.classList.add('done');
-      navItem.querySelector('.dot').style.background = '#3ecf7a';
-      showToast(name + ' agent complete', 'success');
-      loadOutput(name);
+      toast('Sent to Telegram!', 'success');
+      flash('#00fff0');
     } else {
-      status.textContent = 'error';
-      status.className   = 'agent-status';
-      showToast(data.message || 'Agent failed', 'error');
+      toast('Error: ' + data.message, 'error');
     }
   } catch(e) {
-    showToast('Server error', 'error');
+    toast('Error: ' + e.message, 'error');
   }
-
-  btn.disabled    = false;
-  btn.textContent = 'Run again';
+  btn.disabled = false;
+  btn.textContent = '📱 Send to Telegram';
 }
 
-// ── Load Output ──────────────────────────────────────────────
-async function loadOutput(name) {
-  const fileMap = {
-    research: 'topics.md',
-    hooks:    'hooks.md',
-    script:   'script.md',
-    metadata: 'metadata.md',
-    repurpose:'repurpose.md',
+
+
+/* ── Settings ───────────────────────────────────────────── */
+async function loadSettings(){
+  try{
+    const r=await fetch('/api/settings');const d=await r.json();if(d.status!=='ok')return;
+    document.getElementById('niche').value=d.niche;
+    document.getElementById('platform').value=d.platform;
+    document.getElementById('channel_style').value=d.channel_style;
+    log('Config loaded','success','log-settings');
+  }catch(e){}
+}
+
+async function saveSettings(){
+  const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({niche:document.getElementById('niche').value,platform:document.getElementById('platform').value,channel_style:document.getElementById('channel_style').value})});
+  const d=await r.json();
+  if(d.status==='ok'){flash('#00d4ff');log('Saved','success','log-settings');toast('Initialized','success');setCardStatus('settings','done');}
+}
+
+/* ── Run agent ──────────────────────────────────────────── */
+async function runAgent(name){
+  const btn=document.getElementById('btn-'+name);
+  const bdg=document.getElementById('badge-'+name);
+  const logId='log-'+name;
+  btn.disabled=true;btn.textContent='⟳ Running...';
+  if(name==='autopilot'){
+  const steps=['ap-s1','ap-s2','ap-s3','ap-s4','ap-s5','ap-s6','ap-s7'];
+  document.getElementById('autopilot-progress').style.display='block';
+  let i=0;
+  const labels=['Researching topics...','Picking best topic...','Generating hooks...','Picking best hook...','Writing script...','Generating AI suggestions...','Finalizing + Telegram...'];
+  window._apTimer=setInterval(()=>{
+    if(i>0)document.getElementById(steps[i-1]).className='pstep done';
+    if(i<steps.length){
+      document.getElementById(steps[i]).className='pstep active';
+      document.getElementById('ap-step-label').textContent=labels[i];
+      document.getElementById('ap-step-pct').textContent=Math.round(((i+1)/steps.length)*90)+'%';
+      document.getElementById('ap-progress-bar').style.width=Math.round(((i+1)/steps.length)*90)+'%';
+      i++;
+    }
+  },75000); // ~75 sec per step = ~8.5 min total
+}
+  bdg.textContent='running';bdg.className='badge running';
+  setCardStatus(name,'running');log('Agent '+name+' launched','info',logId);
+  const body={};
+  if(name==='hooks')body.selected_topic=selTopic;
+  if(name==='script')body.selected_hook=selHook;
+  if(name==='script_long')body.selected_hook=selHook;
+  try{
+    const r=await fetch('/api/run/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.status==='ok'){
+      bdg.textContent='complete';bdg.className='badge done';setCardStatus(name,'done');
+      flash('#7fff00');log(name+' complete','success',logId);toast(name+' done','success');loadOutput(name);
+
+      if(name==='autopilot'){
+  clearInterval(window._apTimer);
+  ['ap-s1','ap-s2','ap-s3','ap-s4','ap-s5','ap-s6','ap-s7'].forEach(s=>document.getElementById(s).className='pstep done');
+  document.getElementById('ap-progress-bar').style.width='100%';
+  document.getElementById('ap-step-pct').textContent='100%';
+  document.getElementById('ap-step-label').textContent='Complete!';
+  document.getElementById('btn-send-telegram').style.display='inline-flex';
+  document.getElementById('mv-autopilot').textContent='Complete';
+  sendToTelegram();
+}
+    }else{bdg.textContent='error';bdg.className='badge error';setCardStatus(name,'');log('Error: '+(d.message||'?'),'error',logId);}
+  }catch(e){toast('Server error','error');bdg.className='badge error';}
+  btn.disabled=false;btn.textContent='⟳ Run again';
+}
+
+/* ── Load output ────────────────────────────────────────── */
+async function loadOutput(name){
+  const map={research:'topics.md',hooks:'hooks.md',script:'script.md',script_long:'script_long.md',metadata:'metadata.md',repurpose:'repurpose.md',suggestions:'suggestions.md',autopilot:'autopilot_summary.md'};
+  const file=map[name];if(!file)return;
+  try{
+    const r=await fetch('/api/output/'+file);const d=await r.json();
+    if(d.status==='ok'&&d.content){
+      const box=document.getElementById('out-'+name);
+      if(box){box.classList.add('filled');typewriter(box,d.content);}
+      if(name==='research')parseTopics(d.content);
+      if(name==='hooks')parseHooks(d.content);
+    }
+  }catch(e){}
+}
+
+function typewriter(el,text){
+  el.textContent='';
+  const cur=document.createElement('span');cur.className='cursor';el.appendChild(cur);
+  let i=0;const iv=setInterval(()=>{if(i<text.length){el.insertBefore(document.createTextNode(text[i]),cur);i++;el.scrollTop=el.scrollHeight;}else clearInterval(iv);},3);
+}
+
+function parseTopics(content){
+  const list=document.getElementById('list-research');list.innerHTML='';
+  const re=/## (\d+)\. (.+?)\n\*\*Why trending:\*\* (.+?)\n.*?Viral score:\*\* (\d+)/gs;let m;let count=0;
+  while((m=re.exec(content))!==null){
+    const[,num,title,why,score]=m;count++;
+    const el=document.createElement('div');el.className='sel-card';
+    el.innerHTML=`<div><div class="sel-card-title">${title}</div><div class="sel-card-sub">${why}</div></div><span class="sel-card-score">${score}/10</span>`;
+    el.onclick=()=>{
+      document.querySelectorAll('#list-research .sel-card').forEach(i=>i.classList.remove('picked'));
+      el.classList.add('picked');selTopic=num;
+      document.getElementById('hint-hooks').textContent='▶ Topic '+num+': '+title;
+      document.getElementById('btn-hooks').disabled=false;
+      flash('#00d4ff');log('Topic '+num+' selected','success','log-research');toast('Topic locked','success');
+    };list.appendChild(el);
+  }
+  const mv=document.getElementById('mv-research');if(mv)mv.textContent=count;
+}
+
+function parseHooks(content){
+  const list=document.getElementById('list-hooks');list.innerHTML='';
+  const re=/## Hook (\d+) — (.+?)\n\*\*Hook:\*\* "(.+?)"\n\*\*Why it works:\*\* (.+?)\n\*\*Scroll-stop score:\*\* (\d+)/gs;let m;let count=0;
+  while((m=re.exec(content))!==null){
+    const[,num,formula,hook,why,score]=m;count++;
+    const el=document.createElement('div');el.className='sel-card';
+    el.innerHTML=`<div><div class="sel-card-title">"${hook}"</div><div class="sel-card-sub">${formula} · ${why}</div></div><span class="sel-card-score">${score}/10</span>`;
+    el.onclick=()=>{
+      document.querySelectorAll('#list-hooks .sel-card').forEach(i=>i.classList.remove('picked'));
+      el.classList.add('picked');selHook=num;
+      document.getElementById('hint-script').textContent='▶ Hook '+num+': '+hook;
+      document.getElementById('hint-script_long').textContent='▶ Hook '+num+': '+hook;
+      document.getElementById('btn-script').disabled=false;document.getElementById('btn-script_long').disabled=false;
+      document.getElementById('script_input').value=hook;
+      flash('#ff006e');log('Hook '+num+' locked','success','log-hooks');toast('Hook locked','success');
+    };list.appendChild(el);
+  }
+  const mv=document.getElementById('mv-hooks');if(mv)mv.textContent=count;
+}
+
+/* ── Time range ─────────────────────────────────────────── */
+function onVideoSelected(input){
+  if(!input.files[0])return;
+  const v=document.createElement('video');v.preload='metadata';
+  v.onloadedmetadata=()=>{
+    vidDur=Math.floor(v.duration);endSec=vidDur;startSec=0;
+    document.getElementById('range-wrap').style.display='block';
+    document.getElementById('btn-full-video').style.display='inline-flex';
+    document.getElementById('range-start-badge').textContent='0s';
+    document.getElementById('range-end-badge').textContent=vidDur+'s';
+    document.getElementById('range-input-start').value=0;document.getElementById('range-input-end').value=100;
+    document.getElementById('range-handle-start').style.left='0%';document.getElementById('range-handle-end').style.left='100%';
+    updateRangeFill();updateRangeHint();
+    log('Video: '+vidDur+'s','info','log-score_video');URL.revokeObjectURL(v.src);
+  };v.src=URL.createObjectURL(input.files[0]);
+}
+function updateStartRange(){const v=parseInt(document.getElementById('range-input-start').value),ev=parseInt(document.getElementById('range-input-end').value);if(v>=ev){document.getElementById('range-input-start').value=ev-1;return;}startSec=Math.floor((v/100)*vidDur);document.getElementById('range-start-badge').textContent=startSec+'s';document.getElementById('range-handle-start').style.left=v+'%';updateRangeFill();updateRangeHint();}
+function updateEndRange(){const v=parseInt(document.getElementById('range-input-end').value),sv=parseInt(document.getElementById('range-input-start').value);if(v<=sv){document.getElementById('range-input-end').value=sv+1;return;}endSec=Math.floor((v/100)*vidDur);document.getElementById('range-end-badge').textContent=endSec+'s';document.getElementById('range-handle-end').style.left=v+'%';updateRangeFill();updateRangeHint();}
+function updateRangeFill(){const s=vidDur>0?(startSec/vidDur)*100:0,e=vidDur>0?(endSec/vidDur)*100:100;document.getElementById('range-track-fill').style.left=s+'%';document.getElementById('range-track-fill').style.width=(e-s)+'%';}
+function updateRangeHint(){document.getElementById('range-hint-text').textContent=startSec===0&&endSec===vidDur?`Full: ${vidDur}s`:`Scoring ${endSec-startSec}s (${startSec}s → ${endSec}s)`;}
+function scoreFullVideo(){startSec=0;endSec=vidDur;document.getElementById('range-input-start').value=0;document.getElementById('range-input-end').value=100;document.getElementById('range-start-badge').textContent='0s';document.getElementById('range-end-badge').textContent=vidDur+'s';document.getElementById('range-handle-start').style.left='0%';document.getElementById('range-handle-end').style.left='100%';updateRangeFill();updateRangeHint();}
+
+/* ── Animate progress steps ─────────────────────────────── */
+function animSteps(prefix,ids,totalMs){
+  ids.forEach(id=>document.getElementById(id).className='pstep');let i=0;
+  const ms=totalMs/ids.length;
+  const iv=setInterval(()=>{
+    if(i>0)document.getElementById(ids[i-1]).className='pstep done';
+    if(i<ids.length){
+      document.getElementById(ids[i]).className='pstep active';
+      const pct=Math.round(((i+1)/ids.length)*90);
+      document.getElementById('prog-'+prefix+'-bar').style.width=pct+'%';
+      document.getElementById('prog-'+prefix+'-pct').textContent=pct+'%';
+      i++;
+    }else clearInterval(iv);
+  },ms);return iv;
+}
+
+/* ── Render scores ──────────────────────────────────────── */
+function renderScores(prefix,data){
+  document.getElementById('reveal-'+prefix).style.display='block';
+  const trio=document.getElementById('trio-'+prefix);
+  const scores=[{l:'Hook Strength',v:data.hook_strength},{l:'Retention',v:data.retention_score},{l:'Viral Prob.',v:data.viral_probability}];
+  trio.innerHTML=scores.map(s=>{const cls=s.v>=80?'hi':s.v>=60?'md':'lo';return`<div class="score-box ${cls}"><div class="score-num ${cls}" id="sn-${prefix}-${s.l.replace(/\s/g,'')}">${s.v}%</div><div class="score-lbl">${s.l}</div></div>`;}).join('');
+  scores.forEach(s=>{const el=document.getElementById('sn-'+prefix+'-'+s.l.replace(/\s/g,''));let v=0;const iv=setInterval(()=>{v=Math.min(v+2,s.v);el.textContent=v+'%';if(v>=s.v)clearInterval(iv);},14);});
+
+  const sfx=prefix==='video'?'-v':'';
+  [['hook',data.hook_strength,'var(--clr-good)'],['ret',data.retention_score,'var(--clr-warn)'],['vir',data.viral_probability,'var(--clr-tribe)'],['ov',data.overall,'var(--clr-tribe)']].forEach(([id,val,color])=>{
+    const el=document.getElementById('mv-'+id+sfx),bar=document.getElementById('mf-'+id+sfx);
+    if(!el)return;el.style.color=color;let v=0;const iv=setInterval(()=>{v=Math.min(v+2,val);el.textContent=v+'%';if(bar)bar.style.width=v+'%';if(v>=val)clearInterval(iv);},14);
+  });
+
+  const isGood=data.overall>=70;
+  flash(isGood?'rgba(127,255,0,0.12)':'rgba(245,158,11,0.12)');
+  document.getElementById('verdict-'+prefix).innerHTML=`<div class="verdict ${isGood?'good':'warn'}"><div class="verdict-inner"><div class="verdict-emoji">${isGood?'🧠':'⚡'}</div><div><div class="verdict-headline">${isGood?'PUBLISH THIS. IT\'S GOING VIRAL.':'NEEDS IMPROVEMENT — FIX AND RESCORE'}</div><div class="verdict-meta">Overall: ${data.overall}/100 · TRIBE v2 · ${data.per_second?data.per_second.length:0} brain timesteps</div></div><div><div class="verdict-score-num">${data.overall}</div><div class="verdict-score-lbl">/ 100</div></div></div></div>`;
+
+  const logId='log-score_'+prefix;
+  log('Score: '+data.overall+'/100',isGood?'success':'warn',logId);
+
+  document.getElementById('brain-'+prefix).style.display='block';
+  if(data.hemisphere_data){
+    const box=document.getElementById('brainbox-'+prefix);
+    box.innerHTML=`<div class="brain-canvas-grid"><div><div class="brain-hemi-label">Left Hemisphere</div><canvas id="bc-l-${prefix}" width="255" height="146"></canvas></div><div><div class="brain-hemi-label">Right Hemisphere</div><canvas id="bc-r-${prefix}" width="255" height="146"></canvas></div></div>`;
+    drawBrain('bc-l-'+prefix,data.hemisphere_data.left,prefix==='script'?'#bf5fff':'#ff6b00');
+    drawBrain('bc-r-'+prefix,data.hemisphere_data.right,prefix==='script'?'#e879f9':'#ffaa00');
+  }
+  if(data.per_second&&data.per_second.length){document.getElementById('graph-'+prefix).style.display='block';drawChart('chart-'+prefix,data.per_second,prefix==='script'?'#bf5fff':'#ff6b00');}
+  if(data.improvements&&data.improvements.length){document.getElementById('fixes-'+prefix).innerHTML=data.improvements.map(i=>`<div class="fix-item"><div class="fix-ts">⚠ ${i.section}</div><div class="fix-problem">${i.problem}</div><div class="fix-suggest">${i.suggestion}</div></div>`).join('');}
+
+  const url=prefix==='script'?document.getElementById('tribe_url_script').value.trim():document.getElementById('tribe_url_video').value.trim();
+  if(url)pollBrain(prefix,url,logId);
+}
+
+/* ── Draw brain canvas ──────────────────────────────────── */
+function drawBrain(id,data,color){
+  const c=document.getElementById(id);if(!c)return;
+  const x=c.getContext('2d'),W=c.width,H=c.height;
+  x.fillStyle='#060810';x.beginPath();x.ellipse(W/2,H/2,W/2-5,H/2-5,0,0,Math.PI*2);x.fill();
+  data.forEach((val,i)=>{
+    const a=(i/data.length)*Math.PI*2,r=(.2+val*.5)*(Math.min(W,H)/2-9),px=W/2+Math.cos(a)*r,py=H/2+Math.sin(a)*r;
+    x.beginPath();x.arc(px,py,2+val*7,0,Math.PI*2);
+    x.fillStyle=val>.7?color:(val>.4?color+'99':color+'33');x.fill();
+  });
+}
+
+/* ── Draw retention chart ───────────────────────────────── */
+function drawChart(id,ps,color){
+  const c=document.getElementById(id);if(!c)return;
+  c.width=c.offsetWidth||650;c.height=110;
+  const x=c.getContext('2d'),W=c.width,H=c.height,pad={t:10,r:10,b:20,l:32},iW=W-pad.l-pad.r,iH=H-pad.t-pad.b;
+  x.clearRect(0,0,W,H);
+  [25,50,75,100].forEach(v=>{const y=pad.t+(1-v/100)*iH;x.strokeStyle='rgba(255,255,255,0.04)';x.lineWidth=1;x.beginPath();x.moveTo(pad.l,y);x.lineTo(W-pad.r,y);x.stroke();x.fillStyle='#1a2030';x.font='9px JetBrains Mono,monospace';x.textAlign='right';x.fillText(v+'%',pad.l-3,y+3);});
+  if(!ps.length)return;
+  const sX=iW/Math.max(ps.length-1,1);
+  const g=x.createLinearGradient(0,pad.t,0,H-pad.b);g.addColorStop(0,color+'45');g.addColorStop(1,color+'00');
+  x.beginPath();ps.forEach((s,i)=>{const px=pad.l+i*sX,py=pad.t+(1-s.score/100)*iH;i===0?x.moveTo(px,py):x.lineTo(px,py);});x.lineTo(pad.l+(ps.length-1)*sX,H-pad.b);x.lineTo(pad.l,H-pad.b);x.closePath();x.fillStyle=g;x.fill();
+  x.beginPath();x.strokeStyle=color;x.lineWidth=2.5;x.lineJoin='round';ps.forEach((s,i)=>{const px=pad.l+i*sX,py=pad.t+(1-s.score/100)*iH;i===0?x.moveTo(px,py):x.lineTo(px,py);});x.stroke();
+  ps.forEach((s,i)=>{if(s.score<60){x.beginPath();x.arc(pad.l+i*sX,pad.t+(1-s.score/100)*iH,4,0,Math.PI*2);x.fillStyle='#ef4444';x.fill();}});
+  x.fillStyle='#1a2030';x.font='9px JetBrains Mono,monospace';x.textAlign='center';const step=Math.ceil(ps.length/8);ps.forEach((s,i)=>{if(i%step===0)x.fillText(i+'s',pad.l+i*sX,H-3);});
+}
+
+/* ── Poll brain renders ─────────────────────────────────── */
+async function pollBrain(prefix,tribe_url,logId){
+  log('Rendering brain maps...','info',logId);let attempts=0;
+  const iv=setInterval(async()=>{
+    attempts++;if(attempts>40){clearInterval(iv);return;}
+    try{
+      const r=await fetch('/api/tribe_brain_status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tribe_url})});
+      const d=await r.json();
+      if(d.status==='done'&&d.image){
+        clearInterval(iv);
+        const box=document.getElementById('brainbox-'+prefix);
+        box.innerHTML=`<img src="${d.image}" class="brain-img" onclick="this.requestFullscreen()" title="Click fullscreen">`;
+        flash('#bf5fff');log('Brain maps ready','success',logId);toast('Brain maps ready','success');
+      }
+    }catch(e){}
+  },8000);
+}
+
+/* ── TRIBE scorers ──────────────────────────────────────── */
+async function runScriptScore(){
+  const url=document.getElementById('tribe_url_script').value.trim();
+  const script=document.getElementById('script_input').value.trim();
+  if(!url){toast('Enter ngrok URL','error');return;}if(!script){toast('Paste script','error');return;}
+  const btn=document.getElementById('btn-score_script'),bdg=document.getElementById('badge-score_script');
+  btn.disabled=true;btn.textContent='🧠 Scanning...';bdg.textContent='scanning';bdg.className='badge running';
+  setCardStatus('score_script','running');log('Neural scan started','info','log-score_script');
+  document.getElementById('prog-score_script').style.display='block';
+  const steps=['ps-s1','ps-s2','ps-s3','ps-s4','ps-s5','ps-s6'];
+  const iv=animSteps('score_script',steps,5*60*1000);
+  try{
+    const r=await fetch('/api/tribe_score_script',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tribe_url:url,script})});
+    const d=await r.json();if(d.status!=='processing')throw new Error(d.error||'Failed');
+    const poll=setInterval(async()=>{
+      try{
+        const sr=await fetch('/api/tribe_score_script_status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tribe_url:url})});
+        const sd=await sr.json();if(sd.status==='processing')return;
+        clearInterval(poll);clearInterval(iv);
+        if(sd.status==='error'){toast('Scan failed','error');bdg.textContent='error';bdg.className='badge error';btn.disabled=false;btn.textContent='🧠 Run neural scan';return;}
+        steps.forEach(s=>document.getElementById(s).className='pstep done');
+        document.getElementById('prog-score_script-bar').style.width='100%';document.getElementById('prog-score_script-pct').textContent='100%';
+        renderScores('script',sd.result);bdg.textContent='complete';bdg.className='badge done';setCardStatus('score_script','done');
+        toast('Scan complete','success');btn.disabled=false;btn.textContent='🧠 Rescan';
+      }catch(e){}
+    },8000);
+  }catch(e){clearInterval(iv);toast('Error: '+e.message,'error');bdg.className='badge error';btn.disabled=false;btn.textContent='🧠 Run neural scan';}
+}
+
+async function runVideoScore(){
+  const url=document.getElementById('tribe_url_video').value.trim();
+  const fi=document.getElementById('video_file');
+  if(!url){toast('Enter ngrok URL','error');return;}if(!fi.files[0]){toast('Select video','error');return;}
+  const btn=document.getElementById('btn-score_video'),bdg=document.getElementById('badge-score_video');
+  btn.disabled=true;btn.textContent='🧠 Uploading...';bdg.textContent='uploading';bdg.className='badge running';
+  setCardStatus('score_video','running');log('Uploading video...','info','log-score_video');
+  document.getElementById('prog-score_video').style.display='block';
+  const steps=['ps-v1','ps-v2','ps-v3','ps-v4','ps-v5','ps-v6'];
+  const iv=animSteps('score_video',steps,8*60*1000);
+  const fd=new FormData();fd.append('video',fi.files[0]);fd.append('tribe_url',url);fd.append('start_time',startSec.toString());fd.append('end_time',endSec.toString());
+  try{
+    const r=await fetch('/api/tribe_score_video',{method:'POST',body:fd});
+    const d=await r.json();if(d.status!=='processing')throw new Error(d.error||'Failed');
+    btn.textContent='🧠 Scanning...';log('Running TRIBE v2...','info','log-score_video');
+    const poll=setInterval(async()=>{
+      try{
+        const sr=await fetch('/api/tribe_score_video_status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tribe_url:url})});
+        const sd=await sr.json();if(sd.status==='processing')return;
+        clearInterval(poll);clearInterval(iv);
+        if(sd.status==='error'){toast('Scan failed','error');bdg.textContent='error';bdg.className='badge error';btn.disabled=false;btn.textContent='🧠 Run neural scan';return;}
+        steps.forEach(s=>document.getElementById(s).className='pstep done');
+        document.getElementById('prog-score_video-bar').style.width='100%';document.getElementById('prog-score_video-pct').textContent='100%';
+        renderScores('video',sd.result);bdg.textContent='complete';bdg.className='badge done';setCardStatus('score_video','done');
+        toast('Scan complete','success');btn.disabled=false;btn.textContent='🧠 Rescan';
+      }catch(e){}
+    },10000);
+  }catch(e){clearInterval(iv);toast('Error: '+e.message,'error');bdg.className='badge error';btn.disabled=false;btn.textContent='🧠 Run neural scan';}
+}
+
+
+
+async function restoreStatuses(){
+  const files = {
+    'research':'topics.md','hooks':'hooks.md','script':'script.md',
+    'script_long':'script_long.md','metadata':'metadata.md',
+    'repurpose':'repurpose.md','suggestions':'suggestions.md',
+    'autopilot':'autopilot_summary.md'
   };
-  const file = fileMap[name];
-  if (!file) return;
-
-  const res  = await fetch('/api/output/' + file);
-  const data = await res.json();
-
-  if (data.status === 'ok' && data.content) {
-    const box = document.getElementById('output-' + name);
-    box.textContent = data.content;
-    box.classList.add('has-content');
-
-    if (name === 'research') parseTopics(data.content);
-    if (name === 'hooks')    parseHooks(data.content);
+  for(const [name,file] of Object.entries(files)){
+    try{
+      const r=await fetch('/api/output/'+file);
+      const d=await r.json();
+      if(d.status==='ok'&&d.content&&d.content.length>10){
+        setCardStatus(name,'done');
+      }
+    }catch(e){}
   }
 }
 
-// ── Parse Topics into selectable cards ──────────────────────
-function parseTopics(content) {
-  const list  = document.getElementById('topics-list');
-  list.innerHTML = '';
-  const regex = /## (\d+)\. (.+?)\n\*\*Why trending:\*\* (.+?)\n.*?Viral score:\*\* (\d+)/gs;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    const [, num, title, why, score] = match;
-    const item = document.createElement('div');
-    item.className = 'selector-item';
-    item.innerHTML = `
-      <div>
-        <div class="selector-item-title">${title}</div>
-        <div class="selector-item-sub">${why}</div>
-      </div>
-      <span class="selector-badge">${score}/10</span>
-    `;
-    item.onclick = () => {
-      document.querySelectorAll('#topics-list .selector-item')
-        .forEach(i => i.classList.remove('selected'));
-      item.classList.add('selected');
-      selectedTopic = num;
-      document.getElementById('hooks-topic-display').textContent = 'Topic ' + num + ': ' + title;
-      document.getElementById('btn-hooks').disabled = false;
-      showToast('Topic ' + num + ' selected', 'success');
-    };
-    list.appendChild(item);
-  }
+async function loadCronStatus(){
+  try{
+    const r=await fetch('/api/cron/status');
+    const d=await r.json();
+    const badge=document.getElementById('cron-status-badge');
+    const nextRun=document.getElementById('cron-next-run');
+    if(!badge)return;
+    if(d.enabled){
+      badge.textContent='ACTIVE';
+      badge.className='badge done';
+      document.getElementById('cron-hour').value=d.hour;
+      document.getElementById('cron-minute').value=d.minute;
+      const h=parseInt(d.hour),m=parseInt(d.minute);
+      const ampm=h>=12?'PM':'AM';
+      const h12=h%12||12;
+      nextRun.textContent=`Next run: tomorrow at ${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+    }else{
+      badge.textContent='NOT SET';
+      badge.className='badge';
+      nextRun.textContent='No schedule set — runs manually only';
+    }
+  }catch(e){}
 }
 
-// ── Parse Hooks into selectable cards ───────────────────────
-function parseHooks(content) {
-  const list = document.getElementById('hooks-list');
-  list.innerHTML = '';
-  const regex = /## Hook (\d+) — (.+?)\n\*\*Hook:\*\* "(.+?)"\n\*\*Why it works:\*\* (.+?)\n\*\*Scroll-stop score:\*\* (\d+)/gs;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    const [, num, formula, hook, why, score] = match;
-    const item = document.createElement('div');
-    item.className = 'selector-item';
-    item.innerHTML = `
-      <div>
-        <div class="selector-item-title">"${hook}"</div>
-        <div class="selector-item-sub">${formula} · ${why}</div>
-      </div>
-      <span class="selector-badge">${score}/10</span>
-    `;
-    item.onclick = () => {
-      document.querySelectorAll('#hooks-list .selector-item')
-        .forEach(i => i.classList.remove('selected'));
-      item.classList.add('selected');
-      selectedHook = num;
-      document.getElementById('script-hook-display').textContent = 'Hook ' + num + ': ' + hook;
-      document.getElementById('btn-script').disabled = false;
-      showToast('Hook ' + num + ' selected', 'success');
-    };
-    list.appendChild(item);
-  }
+async function setCron(){
+  const hour=document.getElementById('cron-hour').value;
+  const minute=document.getElementById('cron-minute').value;
+  if(hour===''||minute===''){toast('Enter hour and minute','error');return;}
+  try{
+    const r=await fetch('/api/cron/set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hour,minute})});
+    const d=await r.json();
+    if(d.status==='ok'){
+      flash('#00fff0');
+      toast(d.message,'success');
+      loadCronStatus();
+    }else toast('Error: '+d.message,'error');
+  }catch(e){toast('Error','error');}
 }
 
-// ── Load TRIBE v2 Scores ─────────────────────────────────────
-async function loadScores() {
-  const res  = await fetch('/api/output/scores.json');
-  const data = await res.json();
-  if (data.status !== 'ok' || !data.content) return;
-
-  let scores;
-  try { scores = JSON.parse(data.content); } catch(e) { return; }
-
-  document.getElementById('score-grid').style.display = 'grid';
-
-  const setScore = (id, val) => {
-    const el = document.getElementById(id);
-    el.textContent = val + '%';
-    el.className = 'score-val ' + (val >= 80 ? 'high' : val >= 60 ? 'mid' : 'low');
-  };
-  setScore('sc-hook',      scores.hook_strength);
-  setScore('sc-retention', scores.retention_score);
-  setScore('sc-viral',     scores.viral_probability);
-
-  const verdict = document.getElementById('verdict-area');
-  const isGood  = scores.overall >= 70;
-  verdict.innerHTML = `
-    <div class="verdict-box ${isGood ? '' : 'warn'}">
-      <div>
-        <div class="verdict-text ${isGood ? '' : 'warn'}">${scores.verdict}</div>
-        <div class="verdict-sub">Overall score: ${scores.overall}/100</div>
-      </div>
-    </div>
-  `;
-
-  if (scores.improvements && scores.improvements.length) {
-    const list = document.getElementById('improvements-list');
-    list.innerHTML = '';
-    scores.improvements.forEach(imp => {
-      list.innerHTML += `
-        <div class="improvement-item">
-          <div class="improvement-section">${imp.section}</div>
-          <div class="improvement-problem">${imp.problem}</div>
-          <div class="improvement-suggestion">${imp.suggestion}</div>
-        </div>
-      `;
-    });
-  }
-}
-
-
-
-async function loadSettings() {
-  const res  = await fetch('/api/settings');
-  const data = await res.json();
-  if (data.status !== 'ok') return;
-  document.getElementById('niche').value         = data.niche;
-  document.getElementById('platform').value      = data.platform;
-  document.getElementById('channel_style').value = data.channel_style;
+async function removeCron(){
+  try{
+    const r=await fetch('/api/cron/remove',{method:'POST'});
+    const d=await r.json();
+    if(d.status==='ok'){toast('Schedule removed','success');loadCronStatus();}
+    else toast('Error: '+d.message,'error');
+  }catch(e){toast('Error','error');}
 }
 
 loadSettings();
-
-
-
-// ── Auto-load existing outputs on panel switch ───────────────
-document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => {
-    const panel = item.id.replace('nav-','');
-    if (['research','hooks','script','metadata','repurpose'].includes(panel)) {
-      loadOutput(panel);
-    }
-    if (panel === 'score') {
-      loadScores();
-    }
-  });
-});
+restoreStatuses();
+loadOutput('autopilot');
+// Show telegram button if autopilot has run before
+fetch('/api/output/autopilot_summary.md').then(r=>r.json()).then(d=>{
+  if(d.status==='ok'&&d.content&&d.content.length>10){
+    const tgBtn=document.getElementById('btn-send-telegram');
+    if(tgBtn)tgBtn.style.display='inline-flex';
+  }
+}).catch(()=>{});
+loadOutput('research');
+loadOutput('hooks');
+loadOutput('script');
+loadOutput('suggestions');
 </script>
 </body>
 </html>
-

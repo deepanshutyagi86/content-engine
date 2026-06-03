@@ -5,8 +5,16 @@ from flask import Flask, request, jsonify, send_from_directory
 import subprocess
 import json
 import os
+import requests
+import traceback
+
+
 
 app = Flask(__name__, static_folder='dashboard')
+
+
+TELEGRAM_TOKEN = '8627517512:AAEIGO4suVDAdxFHPg7fdr9ZoVOhDCfbvSU'
+TELEGRAM_CHAT_ID = '8273579375'
 
 # ─── Serve Dashboard ──────────────────────────────────────────
 @app.route('/')
@@ -49,8 +57,49 @@ def get_settings():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-
+@app.route('/api/tribe_score', methods=['POST'])
+def get_tribe_score():
+    import requests
+    data = request.json
+    tribe_url = data.get('tribe_url', '').rstrip('/')
+    
+    try:
+        res = requests.get(
+            f"{tribe_url}/tribe_score",
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=30
+        )
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
         
+
+
+
+@app.route('/api/tribe_score_video', methods=['POST'])
+def get_tribe_score_video():
+    import requests
+    import traceback
+    try:
+        tribe_url = request.form.get('tribe_url', '').rstrip('/')
+        
+        if 'video' not in request.files:
+            return jsonify({"status": "error", "message": "no video"}), 400
+        
+        video = request.files['video']
+        
+        res = requests.post(
+            f"{tribe_url}/tribe_score_video",
+            files={"video": (video.filename, video.stream, video.content_type)},
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=300
+        )
+        return jsonify(res.json())
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # ─── Run Agent ────────────────────────────────────────────────
 @app.route('/api/run/<agent_name>', methods=['POST'])
 def run_agent(agent_name):
@@ -98,6 +147,18 @@ def run_agent(agent_name):
             "Read outputs/script.md. "
             "Write output to outputs/repurpose.md"
         ),
+        'suggestions': (
+            "Read AGENTS.md and follow the instructions under "
+            "Agent 4B: Suggestion Agent exactly. "
+            "Read outputs/scores.json and outputs/script.md. "
+            "Write output to outputs/suggestions.md"
+        ),
+        'autopilot': (
+             "Read AGENTS.md and follow Agent 8: Autopilot instructions exactly. "
+             "Run the full pipeline autonomously. "
+             "Read config.py for niche settings. "
+             "Write all outputs as instructed."
+        ),          
     }
 
     if agent_name not in prompts:
@@ -108,12 +169,12 @@ def run_agent(agent_name):
     # Run Claude Code
     try:
         result = subprocess.Popen(
-            ["claude", "-p", prompt],
+            ["claude", "-p", prompt, "--dangerously-skip-permissions"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
-        stdout, stderr = result.communicate(timeout=120)
+        stdout, stderr = result.communicate(timeout=600)
 
         if result.returncode != 0:
             return jsonify({
@@ -148,6 +209,8 @@ def get_output(filename):
         'scores.json',
         'metadata.md',
         'repurpose.md'
+        'suggestion.md',
+        'autopilot_summary.md'
     ]
 
     if filename not in allowed:
@@ -162,6 +225,198 @@ def get_output(filename):
         content = f.read()
 
     return jsonify({"status": "ok", "content": content})
+
+
+
+
+@app.route('/api/tribe_score_script', methods=['POST'])
+def tribe_score_script():
+    import requests
+    data = request.json
+    tribe_url = data.get('tribe_url', '').rstrip('/')
+    script = data.get('script', '')
+    try:
+        res = requests.post(
+            f"{tribe_url}/tribe_score_script",
+            json={"script": script},
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=30
+        )
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/tribe_score_script_status', methods=['POST'])
+def tribe_score_script_status():
+    import requests
+    data = request.json
+    tribe_url = data.get('tribe_url', '').rstrip('/')
+    try:
+        res = requests.get(
+            f"{tribe_url}/tribe_score_script_status",
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=10
+        )
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/tribe_score_video', methods=['POST'])
+def tribe_score_video():
+    import requests
+    tribe_url  = request.form.get('tribe_url', '').rstrip('/')
+    start_time = request.form.get('start_time', '0')
+    end_time   = request.form.get('end_time', '0')
+
+    if 'video' not in request.files:
+        return jsonify({"status": "error", "message": "no video"}), 400
+
+    video = request.files['video']
+    try:
+        res = requests.post(
+            f"{tribe_url}/tribe_score_video",
+            files={"video": (video.filename, video.stream, video.content_type)},
+            data={"start_time": start_time, "end_time": end_time},
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=60
+        )
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/tribe_score_video_status', methods=['POST'])
+def tribe_score_video_status():
+    import requests
+    data = request.json
+    tribe_url = data.get('tribe_url', '').rstrip('/')
+    try:
+        res = requests.get(
+            f"{tribe_url}/tribe_score_video_status",
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=10
+        )
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/tribe_brain_status', methods=['POST'])
+def tribe_brain_status():
+    import requests
+    data = request.json
+    tribe_url = data.get('tribe_url', '').rstrip('/')
+    try:
+        res = requests.get(
+            f"{tribe_url}/tribe_brain_status",
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=30
+        )
+        return jsonify(res.json())
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+def send_telegram(message):
+    import requests
+    try:
+        requests.post(
+            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
+            json={
+                'chat_id': TELEGRAM_CHAT_ID,
+                'text': message,
+                'parse_mode': 'Markdown'
+            },
+            timeout=10
+        )
+        print("Telegram sent!")
+    except Exception as e:
+        print(f'Telegram error: {e}')
+
+@app.route('/api/send_telegram', methods=['POST'])
+def send_telegram_route():
+    try:
+        summary_path = os.path.join('outputs', 'autopilot_summary.md')
+        script_path  = os.path.join('outputs', 'script.md')
+
+        summary = ''
+        if os.path.exists(summary_path):
+            with open(summary_path, 'r') as f:
+                summary = f.read()[:1200]
+
+        script = ''
+        if os.path.exists(script_path):
+            with open(script_path, 'r') as f:
+                script = f.read()[:800]
+
+        message = f"""🧠 *Content Engine — Daily Brief*
+
+{summary}
+
+---
+📋 *Script:*
+{script}
+
+🔗 Dashboard: http://127.0.0.1:5000"""
+
+        send_telegram(message)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/cron/status', methods=['GET'])
+def cron_status():
+    import subprocess
+    try:
+        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+        cron_content = result.stdout
+        if 'content-engine' in cron_content:
+            # Extract time
+            for line in cron_content.split('\n'):
+                if 'content-engine' in line and not line.startswith('#'):
+                    parts = line.split()
+                    minute = parts[0]
+                    hour = parts[1]
+                    return jsonify({"status": "ok", "enabled": True, "hour": hour, "minute": minute})
+        return jsonify({"status": "ok", "enabled": False, "hour": "8", "minute": "0"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/cron/set', methods=['POST'])
+def cron_set():
+    import subprocess
+    data = request.json
+    hour = data.get('hour', '8')
+    minute = data.get('minute', '0')
+    try:
+        # Get existing crontab
+        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+        existing = result.stdout
+        # Remove old content-engine lines
+        lines = [l for l in existing.split('\n') if 'content-engine' not in l and l.strip()]
+        # Add new line
+        cron_line = f"{minute} {hour} * * * cd ~/Documents/claude/content-engine && source venv/bin/activate && curl -s -X POST http://127.0.0.1:5000/api/run/autopilot"
+        lines.append(cron_line)
+        new_crontab = '\n'.join(lines) + '\n'
+        # Write back
+        proc = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE, text=True)
+        proc.communicate(new_crontab)
+        return jsonify({"status": "ok", "message": f"Cron set for {hour}:{minute.zfill(2)} daily"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/cron/remove', methods=['POST'])
+def cron_remove():
+    import subprocess
+    try:
+        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+        existing = result.stdout
+        lines = [l for l in existing.split('\n') if 'content-engine' not in l and l.strip()]
+        new_crontab = '\n'.join(lines) + '\n'
+        proc = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE, text=True)
+        proc.communicate(new_crontab)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ─── Start ────────────────────────────────────────────────────
 if __name__ == '__main__':

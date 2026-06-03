@@ -92,13 +92,16 @@ The user has selected hook number: {SELECTED_HOOK}
 Write a complete video script using that hook as the opening.
 
 Script structure:
-- HOOK (0-5 sec): the selected hook, word for word
-- OPEN LOOP (5-15 sec): tease what they will learn, do not reveal yet
-- CONTEXT (15-45 sec): why this matters right now
-- MAIN CONTENT (45 sec - 3 min): the actual value, broken into 3 clear points
-- RE-HOOK (at 60 sec mark): one sentence to keep them watching
-- RE-HOOK (at 2 min mark): one sentence to keep them watching  
-- CTA (last 20 sec): subscribe, comment, next video
+Target length: 30-40 seconds total (short form first)
+
+- HOOK (0:00 - 0:05): the selected hook, word for word
+- OPEN LOOP (0:05 - 0:10): tease the payoff, don't reveal yet
+- VALUE (0:10 - 0:25): the core insight in 3 punchy sentences max
+- RE-HOOK (0:25 - 0:30): one line that makes them want the next video
+- CTA (0:30 - 0:38): one clear ask — comment, follow, or save
+
+Keep every line under 10 words. Write for spoken delivery, not reading.
+No filler. No "in this video". Every second must earn its place.
 
 For each section mark:
 - [TALKING HEAD] — person speaks to camera
@@ -190,3 +193,72 @@ For each platform:
 - Suggest caption and hashtags
 
 Write output to outputs/repurpose.md
+
+
+## Agent 4B — Suggestion Agent
+
+**Trigger:** User runs "suggestions" agent from dashboard
+**Input files:** `outputs/scores.json`, `outputs/script.md`
+**Output file:** `outputs/suggestions.md`
+
+**Instructions:**
+
+Read `outputs/scores.json` and find all seconds where the score is below 60.
+Read `outputs/script.md` to understand the full script content.
+
+For each weak second (low neural activation), figure out which part of the script corresponds to that timestamp (assume ~2-3 words per second from the start of the script).
+
+Then write specific, creative, brutally honest suggestions for each weak moment.
+
+Format: 
+Second X — [what's happening in script here]
+Problem: [what's weak about this moment]
+Fix: [exact edit — specific words, cut, zoom, B-roll suggestion]
+
+Be direct. Name exact words. Suggest exact edits. No fluff.
+Write minimum 5 suggestions, maximum 10.
+Save output to `outputs/suggestions.md`.
+
+
+
+## Agent 8 — Autopilot
+
+**Trigger:** User runs "autopilot" agent from dashboard
+**Output files:** outputs/topics.md, outputs/hooks.md, outputs/script.md, outputs/suggestions.md
+
+**Instructions:**
+
+You are running the full content pipeline autonomously. Execute each step in order:
+
+**Step 1 — Research**
+Follow Agent 1 instructions exactly. Write 5 topics to outputs/topics.md.
+
+**Step 2 — Pick best topic**
+Read outputs/topics.md. Pick the topic with the highest viral score. 
+If tied, pick the most controversial or emotionally charged one.
+Remember which number topic you picked.
+
+**Step 3 — Hooks**
+Follow Agent 2 instructions exactly using your selected topic.
+Write 8 hooks to outputs/hooks.md.
+
+**Step 4 — Pick best hook**
+Read outputs/hooks.md. Pick the hook with the highest scroll-stop score.
+If tied, pick the most curiosity-gap driven one.
+Remember which number hook you picked.
+
+**Step 5 — Script**
+Follow Agent 3 instructions exactly using your selected hook.
+Write script to outputs/script.md.
+
+**Step 6 — Suggestions**
+Follow Agent 4B instructions exactly.
+Write suggestions to outputs/suggestions.md.
+
+**Step 7 — Summary**
+Write a file outputs/autopilot_summary.md with:
+- Selected topic and why
+- Selected hook and why  
+- Script (full text)
+- Top 3 suggestions
+- One line verdict: "READY TO FILM" or "NEEDS WORK"
